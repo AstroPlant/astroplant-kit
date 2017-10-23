@@ -1,0 +1,8 @@
+# Build artifacts
+*.py[cod]
+
+# Egg
+*.egg-info
+
+# Ignore sample client configs
+astroplant_kit/kit_config.json
