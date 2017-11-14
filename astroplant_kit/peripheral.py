@@ -1,5 +1,6 @@
 import abc
 import sys
+import collections
 import datetime
 import asyncio
 
@@ -100,7 +101,11 @@ class Sensor(Peripheral):
     def run(self):
         while True:
             measurement = yield from self.measure()
-            asyncio.ensure_future(self._publish_measurement(measurement))
+            if isinstance(measurement, collections.Iterable):
+                for m in measurement:
+                    asyncio.ensure_future(self._publish_measurement(m))
+            else:
+                asyncio.ensure_future(self._publish_measurement(measurement))
 
     @abc.abstractmethod
     @asyncio.coroutine
@@ -150,6 +155,10 @@ class Mock(Sensor):
         import random
 
         temperature = random.uniform(19, 22)
-        measurement = Measurement(self, "Temperature", "Degrees Celsius", temperature)
+        pressure = random.uniform(0.98, 1.02)
+
+        temperature_measurement = Measurement(self, "Temperature", "Degrees Celsius", temperature)
+        pressure_measurement = Measurement(self, "Pressure", "Bar", pressure)
+
         await asyncio.sleep(self.sleep / 1000)
-        return measurement
+        return [temperature_measurement, pressure_measurement]
