@@ -1,6 +1,7 @@
 import signal
 import functools
 import asyncio
+import importlib
 import astroplant_client
 import peripheral
 
@@ -16,11 +17,23 @@ class Kit(object):
         configuration = self.api_client.configuration_path.kit_configuration().body[0]
         self.name = configuration['name']
 
+        self._import_modules(configuration['modules'])
         self._configure_peripherals(configuration['peripherals'])
+
+    def _import_modules(self, modules):
+        for module_name in modules:
+            module = importlib.import_module(module_name)
+            globals()[module_name] = module
 
     def _configure_peripherals(self, peripheral_configurations):
         for peripheral_configuration in peripheral_configurations:
-            self.peripheral_manager.create_peripheral(peripheral_configuration['class_name'], peripheral_configuration['peripheral_name'], peripheral_configuration['parameters'])
+            # Get class by class name
+            try:
+                peripheral_class = globals()[peripheral_configuration['module_name']].__dict__[peripheral_configuration['class_name']]
+            except KeyError:
+                raise ValueError("Could not find class '%s' in module '%s'" % (peripheral_configuration['class_name'], peripheral_configuration['module_name']))
+
+            self.peripheral_manager.create_peripheral(peripheral_class, peripheral_configuration['peripheral_name'], peripheral_configuration['parameters'])
             print(peripheral_configuration)
 
     def publish_measurement(self, measurement):

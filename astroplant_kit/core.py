@@ -1,5 +1,3 @@
-from astroplant_sensor_library.manager import SensorManager
-import astroplant_sensor_library.sensors.mock
 import astroplant_client
 from kit import Kit
 import config

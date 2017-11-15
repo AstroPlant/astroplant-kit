@@ -36,24 +36,17 @@ class PeripheralManager(object):
             if predicate(measurement):
                 callback(measurement)
 
-    def create_peripheral(self, peripheral_class_name, peripheral_object_name, peripheral_parameters):
+    def create_peripheral(self, peripheral_class, peripheral_object_name, peripheral_parameters):
         """
         Create and add a peripheral by its class name.
 
-        :param peripheral_class_name: The class name of the peripheral to add.
+        :param peripheral_class: The class of the peripheral to add.
         :param peripheral_object_name: The name of the specific peripheral to add.
         :param peripheral_parameters: The instantiation parameters of the peripheral.
         """
-        # Get class by class name
-        try:
-            peripheral_class = globals()[peripheral_class_name]
-        except KeyError:
-            raise ValueError("Could not find class '%s'" % peripheral_class_name)
 
         # Instantiate peripheral
         peripheral = peripheral_class(peripheral_object_name, **peripheral_parameters)
-        if not isinstance(peripheral, Peripheral):
-            raise TypeError("Class '%s' does not extend Peripheral" % peripheral_class_name)
 
         # Set message publication handle
         peripheral._set_publish_handle(self._publish_handle)
@@ -141,24 +134,3 @@ class Measurement(object):
 
     def __str__(self):
         return "%s - %s %s: %s %s" % (self.date_time, self.peripheral, self.physical_quantity, self.value, self.physical_unit)
-
-class Mock(Sensor):
-    """
-    A mock sensor implementation yielding fake measurements.
-    """
-
-    def __init__(self, *args, sleep):
-        super().__init__(*args)
-        self.sleep = int(sleep)
-
-    async def measure(self):
-        import random
-
-        temperature = random.uniform(19, 22)
-        pressure = random.uniform(0.98, 1.02)
-
-        temperature_measurement = Measurement(self, "Temperature", "Degrees Celsius", temperature)
-        pressure_measurement = Measurement(self, "Pressure", "Bar", pressure)
-
-        await asyncio.sleep(self.sleep / 1000)
-        return [temperature_measurement, pressure_measurement]
