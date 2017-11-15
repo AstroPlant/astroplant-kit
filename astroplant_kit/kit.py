@@ -7,6 +7,7 @@ import peripheral
 
 class Kit(object):
     def __init__(self, api_client: astroplant_client.Client):
+        self.peripheral_modules = {}
         self.peripheral_manager = peripheral.PeripheralManager()
         self.peripheral_manager.subscribe_predicate(lambda a: True, lambda m: self.publish_measurement(m))
         self.api_client = api_client
@@ -25,13 +26,14 @@ class Kit(object):
 
     def _import_modules(self, modules):
         """
-        Import Python modules by name and add them to the globals.
+        Import Python modules by name and add them to the dictionary
+        of loaded peripheral modules.
 
         :param modules: An iterable with module names to import
         """
         for module_name in modules:
             module = importlib.import_module(module_name)
-            globals()[module_name] = module
+            self.peripheral_modules[module_name] = module
 
     def _configure_peripherals(self, peripheral_configurations):
         """
@@ -42,7 +44,7 @@ class Kit(object):
         for peripheral_configuration in peripheral_configurations:
             # Get class by class name
             try:
-                peripheral_class = globals()[peripheral_configuration['module_name']].__dict__[peripheral_configuration['class_name']]
+                peripheral_class = self.peripheral_modules[peripheral_configuration['module_name']].__dict__[peripheral_configuration['class_name']]
             except KeyError:
                 raise ValueError("Could not find class '%s' in module '%s'" % (peripheral_configuration['class_name'], peripheral_configuration['module_name']))
 
