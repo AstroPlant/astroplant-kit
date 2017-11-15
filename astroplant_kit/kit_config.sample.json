@@ -8,5 +8,12 @@
     "auth": {
         "serial": "[[INSERT KIT SERIAL HERE]]",
         "secret": "[[INSERT SECRET HERE]]"
+    },
+    "debug": {
+        "level": "INFO",
+        "peripheral_display": {
+            "module_name": "peripheral",
+            "class_name": "Display"
+        }
     }
 }

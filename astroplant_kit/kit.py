@@ -2,17 +2,46 @@ import signal
 import functools
 import asyncio
 import importlib
+import logging
 import astroplant_client
 import peripheral
 
+logger = logging.getLogger("AstroPlant")
+
 class Kit(object):
-    def __init__(self, api_client: astroplant_client.Client):
+    def __init__(self, api_client: astroplant_client.Client, debug_configuration):
         self.peripheral_modules = {}
         self.peripheral_manager = peripheral.PeripheralManager()
         self.peripheral_manager.subscribe_predicate(lambda a: True, lambda m: self.publish_measurement(m))
         self.api_client = api_client
+
+        self.initialise_debug(debug_configuration)
+
+        logger.info("Configuring kit.")
         self.configure()
+
+        logger.info("Opening websocket.")
         self.api_client._open_websocket()
+
+    def initialise_debug(self, debug_configuration):
+        """
+        Configure debug 
+        """
+        debug_level = debug_configuration['level']
+        if 'peripheral_display' in debug_configuration:
+            logger.info("Initialising peripheral debug display device.")
+            peripheral_configuration = debug_configuration['peripheral_display']
+
+            self._import_modules([peripheral_configuration['module_name']])
+            peripheral_class = self.peripheral_modules[peripheral_configuration['module_name']].__dict__[peripheral_configuration['class_name']]
+            peripheral_device = self.peripheral_manager.create_peripheral(peripheral_class, "Debug display device", {})
+            logger.info("Peripheral debug display device created.")
+
+            log_handler = logging.StreamHandler(peripheral.DisplayDeviceStream(peripheral_device))
+            log_handler.setLevel(debug_level)
+
+            logger.addHandler(log_handler)
+            logger.debug("Peripheral debug display device log handler added.")
 
     def configure(self):
         """
