@@ -81,13 +81,11 @@ class Peripheral(object):
         self.name = name
 
     @abc.abstractmethod
-    @asyncio.coroutine
-    def run(self):
+    async def run(self):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    @asyncio.coroutine
-    def do(self, command):
+    async def do(self, command):
         raise NotImplementedError()
 
     def get_name(self):
@@ -103,10 +101,9 @@ class Sensor(Peripheral):
 
     RUNNABLE = True
 
-    @asyncio.coroutine
-    def run(self):
+    async def run(self):
         while True:
-            measurement = yield from self.measure()
+            measurement = await self.measure()
             if isinstance(measurement, collections.Iterable):
                 for m in measurement:
                     asyncio.ensure_future(self._publish_measurement(m))
@@ -114,12 +111,10 @@ class Sensor(Peripheral):
                 asyncio.ensure_future(self._publish_measurement(measurement))
 
     @abc.abstractmethod
-    @asyncio.coroutine
-    def measure(self):
+    async def measure(self):
         raise NotImplementedError()
 
-    @asyncio.coroutine
-    def _publish_measurement(self, measurement):
+    async def _publish_measurement(self, measurement):
         self._publish_handle(measurement)
 
 class Measurement(object):
