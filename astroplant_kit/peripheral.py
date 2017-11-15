@@ -56,6 +56,7 @@ class PeripheralManager(object):
         :param peripheral_class: The class of the peripheral to add.
         :param peripheral_object_name: The name of the specific peripheral to add.
         :param peripheral_parameters: The instantiation parameters of the peripheral.
+        :return: The created peripheral.
         """
 
         # Instantiate peripheral
@@ -65,6 +66,8 @@ class PeripheralManager(object):
         peripheral._set_publish_handle(self._publish_handle)
 
         self.peripherals.append(peripheral)
+
+        return peripheral
 
 class Peripheral(object):
     """
@@ -146,3 +149,33 @@ class Measurement(object):
 
     def __str__(self):
         return "%s - %s %s: %s %s" % (self.date_time, self.peripheral, self.physical_quantity, self.value, self.physical_unit)
+
+class Display(Peripheral):
+
+    RUNNABLE = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.log_message_queue = []
+        
+    async def run(self):
+        while True:
+            if len(self.log_message_queue) > 0:
+                msg = self.log_message_queue.pop(0)
+                print(msg)
+            await asyncio.sleep(0.1)
+
+    def add_log_message(self, msg):
+        self.log_message_queue.append(msg)
+
+class DisplayDeviceStream(object):
+    def __init__(self, peripheral_display_device):
+        self.peripheral_display_device = peripheral_display_device
+        self.str = ""
+
+    def write(self, str):
+        self.str += str
+
+    def flush(self):
+        self.peripheral_display_device.add_log_message(self.str)
+        self.str = ""
