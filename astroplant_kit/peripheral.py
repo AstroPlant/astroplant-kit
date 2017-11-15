@@ -10,14 +10,21 @@ class PeripheralManager(object):
         self.subscribers = []
 
     def runnable_peripherals(self):
+        """
+        :return: An iterable of all runnable peripherals.
+        """
         return filter(lambda peripheral: peripheral.RUNNABLE, self.peripherals)
 
     async def run(self):
+        """
+        Run all runnable peripherals.
+        """
         await asyncio.wait([peripheral.run() for peripheral in self.runnable_peripherals()])
 
     def subscribe_physical_quantity(self, physical_quantity, callback):
         """
         Subscribe to messages concerning a specific physical quantity.
+
         :param physical_quantity: The name of the physical quantity for which the measurements are being subscribed to.
         :param callback: The callback to call with the measurement.
         """
@@ -26,12 +33,18 @@ class PeripheralManager(object):
     def subscribe_predicate(self, predicate, callback):
         """
         Subscribe to messages that conform to a predicate.
+
         :param predicate: A function taking as input a measurement and returning true or false.
         :param callback: The callback to call with the measurement.
         """
         self.subscribers.append((predicate, callback))
 
     def _publish_handle(self, measurement):
+        """
+        Publish a measurement.
+
+        :param measurement: The measurement to publish.
+        """
         for (predicate, callback) in self.subscribers:
             if predicate(measurement):
                 callback(measurement)
@@ -110,6 +123,10 @@ class Sensor(Peripheral):
         self._publish_handle(measurement)
 
 class Measurement(object):
+    """
+    Measurement class.
+    """
+
     def __init__(self, peripheral, physical_quantity, physical_unit, value):
         self.peripheral = peripheral
         self.physical_quantity = physical_quantity
