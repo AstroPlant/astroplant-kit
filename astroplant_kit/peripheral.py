@@ -162,11 +162,15 @@ class Display(Peripheral):
         while True:
             if len(self.log_message_queue) > 0:
                 msg = self.log_message_queue.pop(0)
-                print(msg)
+                self.display(msg)
             await asyncio.sleep(0.1)
 
     def add_log_message(self, msg):
         self.log_message_queue.append(msg)
+
+    @abc.abstractmethod
+    def display(self, str):
+        raise NotImplementedError()
 
 class DisplayDeviceStream(object):
     def __init__(self, peripheral_display_device):
