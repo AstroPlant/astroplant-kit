@@ -45,6 +45,8 @@ class Kit(object):
 
             log_handler = logging.StreamHandler(peripheral.DisplayDeviceStream(peripheral_device))
             log_handler.setLevel(debug_level)
+            formatter = logging.Formatter("%(levelname)s\n%(message)s")
+            log_handler.setFormatter(formatter)
 
             logger.addHandler(log_handler)
             logger.debug("Peripheral debug display device log handler added.")
