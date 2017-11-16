@@ -163,7 +163,11 @@ class Display(Peripheral):
             if len(self.log_message_queue) > 0:
                 msg = self.log_message_queue.pop(0)
                 self.display(msg)
-            await asyncio.sleep(0.1)
+            await self._run()
+
+    async def _run(self):
+        # Async wait for new instructions
+        await asyncio.sleep(0.5)
 
     def add_log_message(self, msg):
         self.log_message_queue.append(msg)
