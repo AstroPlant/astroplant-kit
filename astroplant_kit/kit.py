@@ -20,13 +20,13 @@ class Kit(object):
         logger.info("Configuring kit.")
         try:
             self.configure()
-        except e:
+        except Exception as e:
             logger.error("Could not configure kit: %s" % e)
 
         logger.info("Opening websocket.")
         try:
             self.api_client._open_websocket()
-        except e:
+        except Exception as e:
             logger.error("Could not open websocket: %s" % e)
 
     def initialise_debug(self, debug_configuration):
