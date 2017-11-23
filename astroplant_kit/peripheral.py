@@ -176,6 +176,10 @@ class Display(Peripheral):
     def display(self, str):
         raise NotImplementedError()
 
+class DebugDisplay(Display):
+    def display(self, str):
+        print("Debug Display: %s" % str)
+
 class DisplayDeviceStream(object):
     def __init__(self, peripheral_display_device):
         self.peripheral_display_device = peripheral_display_device
