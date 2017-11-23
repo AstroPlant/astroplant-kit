@@ -103,6 +103,7 @@ class Sensor(Peripheral):
     """
 
     RUNNABLE = True
+    SLEEP_BETWEEN_MEASUREMENTS = 0.5
 
     async def run(self):
         while True:
@@ -112,6 +113,7 @@ class Sensor(Peripheral):
                     asyncio.ensure_future(self._publish_measurement(m))
             else:
                 asyncio.ensure_future(self._publish_measurement(measurement))
+            await asyncio.sleep(self.SLEEP_BETWEEN_MEASUREMENTS)
 
     @abc.abstractmethod
     async def measure(self):
@@ -157,7 +159,7 @@ class Display(Peripheral):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.log_message_queue = []
-        
+
     async def run(self):
         while True:
             if len(self.log_message_queue) > 0:
