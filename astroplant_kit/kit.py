@@ -1,6 +1,7 @@
 import signal
 import functools
 import asyncio
+import threading
 import importlib
 import logging
 import astroplant_client
@@ -10,10 +11,15 @@ logger = logging.getLogger("AstroPlant")
 
 class Kit(object):
     def __init__(self, api_client: astroplant_client.Client, debug_configuration):
+        self.halt = False
+
         self.peripheral_modules = {}
         self.peripheral_manager = peripheral.PeripheralManager()
         self.peripheral_manager.subscribe_predicate(lambda a: True, lambda m: self.publish_measurement(m))
         self.api_client = api_client
+
+        self.messages = []
+        self.messages_condition = threading.Condition()
 
         self.initialise_debug(debug_configuration)
 
@@ -90,23 +96,50 @@ class Kit(object):
 
     def publish_measurement(self, measurement):
         """
-        Publish a measurement to the back-end.
+        Enqueue a measurement for publishing to the back-end.
 
         :param measurement: The measurement to publish.
         """
-        self.api_client.publish_measurement(measurement)
+        with self.messages_condition:
+            self.messages.append(measurement)
+            self.messages_condition.notify()
+
+    def _api_worker(self):
+        while True:
+            with self.messages_condition:
+                if len(self.messages) == 0:
+                    # Wait until there is at least one measurement available
+                    self.messages_condition.wait()
+
+                if self.halt:
+                    # The application should halt
+                    break
+
+                measurement = self.messages.pop(0)
+            self.api_client.publish_measurement(measurement)
 
     def run(self):
         """
-        Run the async event loop.
+        Run the kit.
         """
 
+        # Run the API worker in a separate thread
+        api_worker = threading.Thread(target=self._api_worker)
+        api_worker.start()
+
+        # Run the async event loop
         self.event_loop = asyncio.get_event_loop()
         try:
             self.event_loop.run_until_complete(self.peripheral_manager.run())
         except KeyboardInterrupt:
-            pass
+            # Request halt
+            self.halt = True
+
+            # Notify potentially waiting API worker thread
+            with self.messages_condition:
+                self.messages_condition.notify()
         finally:
             self.event_loop.stop()
 
         self.event_loop.close()
+        api_worker.join()
