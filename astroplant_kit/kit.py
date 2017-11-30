@@ -116,12 +116,15 @@ class Kit(object):
                     break
 
                 measurement = self.messages.pop(0)
+            logger.debug('Publishing measurement to websocket: %s' % measurement)
             self.api_client.publish_measurement(measurement)
 
     def run(self):
         """
         Run the kit.
         """
+
+        logger.info('Starting.')
 
         # Run the API worker in a separate thread
         api_worker = threading.Thread(target=self._api_worker)
