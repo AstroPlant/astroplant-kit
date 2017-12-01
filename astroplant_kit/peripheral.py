@@ -3,6 +3,10 @@ import sys
 import collections
 import datetime
 import asyncio
+import logging
+import collections
+
+logger = logging.getLogger("AstroPlant")
 
 class PeripheralManager(object):
     def __init__(self):
@@ -82,6 +86,7 @@ class Peripheral(object):
 
     def __init__(self, name):
         self.name = name
+        self.logger = logger.getChild("peripheral").getChild(self.name)
 
     @abc.abstractmethod
     async def run(self):
@@ -97,23 +102,77 @@ class Peripheral(object):
     def _set_publish_handle(self, publish_handle):
         self._publish_handle = publish_handle
 
+    def __str__(self):
+        return self.name
+
 class Sensor(Peripheral):
     """
     Abstract sensor base class.
     """
 
     RUNNABLE = True
-    SLEEP_BETWEEN_MEASUREMENTS = 0.5
+
+    #: Amount of time in seconds to wait between making measurements
+    TIME_SLEEP_BETWEEN_MEASUREMENTS = 0.5
+
+    #: Amount of time in seconds over which measurements are reduced before publishing them for storage
+    TIME_REDUCE_MEASUREMENTS = 10.0
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.measurements = []
 
     async def run(self):
+        await asyncio.wait([self._make_measurements(), self._reduce_measurements()])
+
+    async def _make_measurements(self):
+        """
+        Repeatedly make measurements.
+        """
         while True:
             measurement = await self.measure()
             if isinstance(measurement, collections.Iterable):
+                # Add all measurements to the sensor's measurement list (for later reduction)
+                self.measurements.extend(measurement)
+
+                # Publish each measurement
                 for m in measurement:
                     asyncio.ensure_future(self._publish_measurement(m))
             else:
+                # Add measurement to the sensor's measurement list (for later reduction)
+                self.measurements.append(measurement)
+
+                # Publish the measurement
                 asyncio.ensure_future(self._publish_measurement(measurement))
-            await asyncio.sleep(self.SLEEP_BETWEEN_MEASUREMENTS)
+            await asyncio.sleep(self.TIME_SLEEP_BETWEEN_MEASUREMENTS)
+            
+    async def _reduce_measurements(self):
+        """
+        Repeatedly reduce multiple measurements made to a single measurement.
+        """
+        while True:
+            self.logger.debug("Reducing measurements. %s" % len(self.measurements))
+
+            # Group measurements by physical quantity and unit
+            grouped_measurements = collections.defaultdict(list)
+            for measurement in self.measurements:
+                grouped_measurements[(measurement.get_physical_quantity(), measurement.get_physical_unit())].append(measurement)
+
+            # Empty list
+            self.measurements = []
+
+            # Produce list of reduced measurements
+            try:
+                reduced_measurements = [self.reduce(val) for (key, val) in grouped_measurements.items()]
+            except Exception as e:
+                self.logger.error("Could not reduce measurements: %s" % e)
+                return
+
+            # Publish reduced measurements
+            for reduced_measurement in reduced_measurements:
+                self.logger.debug("Publish: %s" % reduced_measurement)
+
+            await asyncio.sleep(self.TIME_REDUCE_MEASUREMENTS)
 
     @abc.abstractmethod
     async def measure(self):
@@ -121,6 +180,23 @@ class Sensor(Peripheral):
 
     async def _publish_measurement(self, measurement):
         self._publish_handle(measurement)
+
+    def reduce(self, measurements):
+        """
+        Reduce a list of measurements to a single measurement.
+
+        :param measurements: The list of measurements to reduce.
+        :return: A single measurement, or None
+        """
+        if not measurements:
+            return None
+
+        values = list(map(lambda m: m.get_value(), measurements))
+        avg_value = sum(values) / len(values)
+
+        # Make a new measurement based on the old measurements
+        measurement = measurements[0]
+        return Measurement(measurement.get_peripheral(), measurement.get_physical_quantity(), measurement.get_physical_unit(), avg_value)
 
 class Measurement(object):
     """
