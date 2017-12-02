@@ -145,7 +145,7 @@ class Sensor(Peripheral):
                 # Publish the measurement
                 asyncio.ensure_future(self._publish_measurement(measurement))
             await asyncio.sleep(self.TIME_SLEEP_BETWEEN_MEASUREMENTS)
-            
+
     async def _reduce_measurements(self):
         """
         Repeatedly reduce multiple measurements made to a single measurement.
@@ -170,7 +170,7 @@ class Sensor(Peripheral):
 
             # Publish reduced measurements
             for reduced_measurement in reduced_measurements:
-                self.logger.debug("Publish: %s" % reduced_measurement)
+                asyncio.ensure_future(self._publish_measurement(reduced_measurement))
 
             await asyncio.sleep(self.TIME_REDUCE_MEASUREMENTS)
 
@@ -196,19 +196,31 @@ class Sensor(Peripheral):
 
         # Make a new measurement based on the old measurements
         measurement = measurements[0]
-        return Measurement(measurement.get_peripheral(), measurement.get_physical_quantity(), measurement.get_physical_unit(), avg_value)
+        return Measurement(measurement.get_peripheral(), measurement.get_physical_quantity(), measurement.get_physical_unit(), avg_value, measurement_type = MeasurementType.REDUCED)
+
+class MeasurementType(object):
+    """
+    Class holding the possible types of measurements.
+    """
+
+    #: A real-time measurement
+    REAL_TIME = "REAL_TIME"
+
+    #: A reduced measurement (e.g. an average over a longer time window)
+    REDUCED = "REDUCED"
 
 class Measurement(object):
     """
     Measurement class.
     """
 
-    def __init__(self, peripheral, physical_quantity, physical_unit, value):
+    def __init__(self, peripheral, physical_quantity, physical_unit, value, measurement_type=MeasurementType.REAL_TIME):
         self.peripheral = peripheral
         self.physical_quantity = physical_quantity
         self.physical_unit = physical_unit
         self.value = value
         self.date_time = datetime.datetime.utcnow()
+        self.measurement_type = measurement_type
 
     def get_peripheral(self):
         return self.peripheral
@@ -224,6 +236,9 @@ class Measurement(object):
 
     def get_date_time(self):
         return self.date_time
+
+    def get_measurement_type(self):
+        return self.measurement_type
 
     def __str__(self):
         return "%s - %s %s: %s %s" % (self.date_time, self.peripheral, self.physical_quantity, self.value, self.physical_unit)
