@@ -25,7 +25,7 @@ if __name__ == "__main__":
     logger.info('Reading configuration.')
     try:
         conf = config.read_config()
-    except e:
+    except Exception as e:
         logger.error('Exception while reading configuration: %s' % e)
     
     logger.info('Creating AstroPlant network client.')
