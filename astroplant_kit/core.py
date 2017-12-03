@@ -1,7 +1,7 @@
 import logging
 import astroplant_client
-from kit import Kit
-import config
+from astroplant_kit.kit import Kit
+from astroplant_kit import config
 
 if __name__ == "__main__":
     # Logging

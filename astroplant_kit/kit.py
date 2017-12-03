@@ -5,7 +5,7 @@ import threading
 import importlib
 import logging
 import astroplant_client
-import peripheral
+from . import peripheral
 
 logger = logging.getLogger("AstroPlant")
 
