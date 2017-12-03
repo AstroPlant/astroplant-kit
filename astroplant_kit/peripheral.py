@@ -9,6 +9,13 @@ import collections
 logger = logging.getLogger("AstroPlant")
 
 class PeripheralManager(object):
+    """
+    A peripheral device manager; this manager keeps track of all peripherals,
+    provides the ability to subscribe to peripheral device measurements,
+    and provides the ability to run all runnable peripheral devices (such as
+    sensors).
+    """
+
     def __init__(self):
         self.peripherals = []
         self.subscribers = []
@@ -90,16 +97,25 @@ class Peripheral(object):
 
     @abc.abstractmethod
     async def run(self):
+        """
+        Asynchronously run the peripheral device.
+        """
         raise NotImplementedError()
 
     @abc.abstractmethod
     async def do(self, command):
+        """
+        Asynchronously perform a command on the device.
+        """
         raise NotImplementedError()
 
     def get_name(self):
         return self.name
 
     def _set_publish_handle(self, publish_handle):
+        """
+        Set the handle this device's measurements should be published to.
+        """
         self._publish_handle = publish_handle
 
     def __str__(self):
@@ -244,6 +260,12 @@ class Measurement(object):
         return "%s - %s %s: %s %s" % (self.date_time, self.peripheral, self.physical_quantity, self.value, self.physical_unit)
 
 class Display(Peripheral):
+    """
+    An abstract class for peripheral display devices. These devices can display strings.
+
+    Todo: improve implementation, and add ability to somehow "rotate" messages, e.g. showing
+    up-to-date measurement statistics.
+    """
 
     RUNNABLE = True
 
@@ -263,17 +285,33 @@ class Display(Peripheral):
         await asyncio.sleep(0.5)
 
     def add_log_message(self, msg):
+        """
+        Add a log message to be displayed on the device.
+
+        :param msg: The message to be displayed.
+        """
         self.log_message_queue.append(msg)
 
     @abc.abstractmethod
     def display(self, str):
+        """
+        Display a string on the device.
+
+        :self str: The string to display.
+        """
         raise NotImplementedError()
 
 class DebugDisplay(Display):
+    """
+    A trivial peripheral display device implementation printing messages to the terminal.
+    """
     def display(self, str):
         print("Debug Display: %s" % str)
 
 class DisplayDeviceStream(object):
+    """
+    A stream class to be used for loggers logging to peripheral display devices.
+    """
     def __init__(self, peripheral_display_device):
         self.peripheral_display_device = peripheral_display_device
         self.str = ""

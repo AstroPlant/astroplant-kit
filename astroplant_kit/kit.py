@@ -1,3 +1,7 @@
+"""
+Contains the main kit routines.
+"""
+
 import signal
 import functools
 import asyncio
@@ -37,7 +41,11 @@ class Kit(object):
 
     def initialise_debug(self, debug_configuration):
         """
-        Configure debug 
+        Initialise debugging options from the given debug configuration dictionary.
+
+        :param debug_configuration: The debug configuration dictionary. Contains the
+        configuration for a Display module to write to, as well as the level of logging
+        required.
         """
         debug_level = debug_configuration['level']
         if 'peripheral_display' in debug_configuration:
@@ -59,7 +67,7 @@ class Kit(object):
 
     def configure(self):
         """
-        Configure the kit using the configuration from the backend.
+        Configure the kit using the configuration fetched from the backend.
         """
         configuration = self.api_client.configuration_path.kit_configuration().body[0]
         self.name = configuration['name']
@@ -105,6 +113,9 @@ class Kit(object):
             self.messages_condition.notify()
 
     def _api_worker(self):
+        """
+        Runs the API message worker; publishes measurements to the API.
+        """
         while True:
             with self.messages_condition:
                 if len(self.messages) == 0:
