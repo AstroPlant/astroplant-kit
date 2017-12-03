@@ -1,0 +1,1 @@
+git+git://github.com/astroplant/astroplant-api-python-client.git#egg=astroplant-client
