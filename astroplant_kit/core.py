@@ -4,7 +4,11 @@
 Bootstraps the kit: sets up logging, creates the API client, and starts the kit run routine.
 """
 
+# Make sure astroplant_kit is in the path
+import os
 import sys
+sys.path.append(os.path.abspath(os.path.dirname(__file__) + '/..'))
+
 import logging
 import astroplant_client
 from astroplant_kit.kit import Kit
