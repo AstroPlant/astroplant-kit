@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 Bootstraps the kit: sets up logging, creates the API client, and starts the kit run routine.
 """

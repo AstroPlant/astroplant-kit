@@ -12,7 +12,7 @@ Full documentation can be found [here](https://astroplant-kit.readthedocs.io/en/
 Install the kit dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 
 # Configure AstroPlant
@@ -51,5 +51,5 @@ The `auth.serial` and `auth.secret` are obtained by registering a new kit on the
 To run the kit, perform:
 
 ```bash
-python core.py
+./core.py
 ```
