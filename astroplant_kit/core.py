@@ -2,6 +2,7 @@
 Bootstraps the kit: sets up logging, creates the API client, and starts the kit run routine.
 """
 
+import sys
 import logging
 import astroplant_client
 from astroplant_kit.kit import Kit
@@ -31,6 +32,7 @@ if __name__ == "__main__":
         conf = config.read_config()
     except Exception as e:
         logger.error('Exception while reading configuration: %s' % e)
+        sys.exit(e.errno)
     
     logger.info('Creating AstroPlant network client.')
     api_client = astroplant_client.Client(conf["api"]["root"], conf["websockets"]["url"])
