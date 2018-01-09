@@ -8,13 +8,13 @@ import asyncio
 import threading
 import importlib
 import logging
-import astroplant_client
-from . import peripheral
+from astroplant_client import Client
+from astroplant_kit import peripheral
 
 logger = logging.getLogger("AstroPlant")
 
 class Kit(object):
-    def __init__(self, api_client: astroplant_client.Client, debug_configuration):
+    def __init__(self, api_client: Client, debug_configuration):
         self.halt = False
 
         self.peripheral_modules = {}
