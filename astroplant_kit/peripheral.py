@@ -71,7 +71,7 @@ class PeripheralManager(object):
         """
 
         # Instantiate peripheral
-        peripheral = peripheral_class(peripheral_object_name, **peripheral_parameters)
+        peripheral = peripheral_class(peripheral_object_name, self, **peripheral_parameters)
 
         # Set message publication handle
         peripheral._set_publish_handle(self._publish_handle)
@@ -91,8 +91,9 @@ class Peripheral(object):
     #: Boolean indicating whether the peripheral can accept commands.
     COMMANDS = False
 
-    def __init__(self, name):
+    def __init__(self, name, peripheral_device_manager):
         self.name = name
+        self.manager = peripheral_device_manager
         self.logger = logger.getChild("peripheral").getChild(self.name)
 
     @abc.abstractmethod
@@ -120,7 +121,7 @@ class Peripheral(object):
 
     def __str__(self):
         return self.name
-
+        
 class Sensor(Peripheral):
     """
     Abstract sensor base class.
@@ -214,6 +215,14 @@ class Sensor(Peripheral):
         measurement = measurements[0]
         return Measurement(measurement.get_peripheral(), measurement.get_physical_quantity(), measurement.get_physical_unit(), avg_value, measurement_type = MeasurementType.REDUCED)
 
+class Actuator(Peripheral):
+    """
+    Abstract actuator base class. Incomplete.
+    """
+
+    RUNNABLE = False
+    
+        
 class MeasurementType(object):
     """
     Class holding the possible types of measurements.
@@ -256,6 +265,18 @@ class Measurement(object):
     def get_measurement_type(self):
         return self.measurement_type
 
+    """
+    def dict(self):
+        return {
+            'peripheral': self.peripheral,
+            'physical_quantity': self.physical_quantity,
+            'physical_unit': self.physical_unit,
+            'value': self.value,
+            'date_time': self.date_time,
+            'measurement_type': self.measurement_type
+        }
+    """
+        
     def __str__(self):
         return "%s - %s %s: %s %s" % (self.date_time, self.peripheral, self.physical_quantity, self.value, self.physical_unit)
 
@@ -322,3 +343,47 @@ class DisplayDeviceStream(object):
     def flush(self):
         self.peripheral_display_device.add_log_message(self.str)
         self.str = ""
+
+class LocalDataLogger(Actuator):
+    """
+    A virtual peripheral device writing observations to internal storage.
+    """
+    
+    def __init__(self, *args, storage_path, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.storage_path = storage_path
+        
+        # Subscribe to all REDUCED (processed) measurements.
+        self.manager.subscribe_predicate(
+            lambda m: m.measurement_type == MeasurementType.REDUCED,
+            self._store_measurement);
+        
+    def _store_measurement(self, measurement):
+        # Import required modules.
+        import csv
+        import os
+    
+        measurement_dict = measurement.__dict__
+    
+        file_name = "%s-%s.csv" % (measurement.date_time.strftime("%Y%m%d"), measurement.physical_quantity)
+        path = os.path.join(self.storage_path, file_name)
+        
+        # Check whether the file exists.
+        exists = os.path.isfile(path)
+        
+        # Create file and directories if it does not exist yet.
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        
+        with open(path, 'a', newline='') as csv_file:
+            # Get the measurement object field names.
+            # Sort them to ensure csv headers have
+            # consistent field ordering.
+            field_names = sorted(measurement_dict.keys())
+            writer = csv.DictWriter(csv_file, fieldnames=field_names)
+            
+            if not exists:
+                # File is new: write csv header.
+                writer.writeheader()
+                
+            writer.writerow(measurement_dict)
+        

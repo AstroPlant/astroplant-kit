@@ -6,3 +6,6 @@
 
 # Ignore sample client configs
 astroplant_kit/kit_config.json
+
+# Ignore output
+astroplant_kit/data
