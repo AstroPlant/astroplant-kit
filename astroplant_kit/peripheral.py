@@ -332,6 +332,8 @@ class Display(Peripheral):
         value = int(m.get_value())
         unit = str(m.get_physical_unit())
         self.display(type + '\n' + str(value) + " " + unit)
+        
+class DebugDisplay(Display):
     """
     A trivial peripheral display device implementation printing messages to the terminal.
     """
