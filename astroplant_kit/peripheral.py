@@ -80,6 +80,8 @@ class PeripheralManager(object):
 
         return peripheral
 
+
+
 class Peripheral(object):
     """
     Abstract peripheral device base class.
@@ -287,14 +289,16 @@ class Display(Peripheral):
     Todo: improve implementation, and add ability to somehow "rotate" messages, e.g. showing
     up-to-date measurement statistics.
     """
-
     RUNNABLE = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.log_message_queue = []
+        # Subscribe to all measurements.
+        self.manager.subscribe_predicate(lambda a: True, lambda m: self.handle_measurement(m))
 
     async def run(self):
+
         while True:
             if len(self.log_message_queue) > 0:
                 msg = self.log_message_queue.pop(0)
@@ -302,6 +306,7 @@ class Display(Peripheral):
             await self._run()
 
     async def _run(self):
+
         # Async wait for new instructions
         await asyncio.sleep(0.5)
 
@@ -322,7 +327,11 @@ class Display(Peripheral):
         """
         raise NotImplementedError()
 
-class DebugDisplay(Display):
+    def handle_measurement(self, m):
+        type = str(m.get_peripheral())
+        value = int(m.get_value())
+        unit = str(m.get_physical_unit())
+        self.display(type + '\n' + str(value) + " " + unit)
     """
     A trivial peripheral display device implementation printing messages to the terminal.
     """
