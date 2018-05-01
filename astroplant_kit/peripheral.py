@@ -3,6 +3,7 @@ import sys
 import collections
 import datetime
 import asyncio
+import concurrent.futures
 import logging
 import collections
 
@@ -292,18 +293,40 @@ class Display(Peripheral):
         super().__init__(*args, **kwargs)
         self.log_message_queue = []
         self.log_condition = asyncio.Condition()
+        self.measurements = {}
         
         # Subscribe to all measurements.
         self.manager.subscribe_predicate(lambda a: True, lambda m: self.handle_measurement(m))
 
     async def run(self):
+        idx = 0
+
         while True:
             if len(self.log_message_queue) > 0:
+                # Display log.
                 msg = self.log_message_queue.pop(0)
                 self.display(msg)
+            elif len(self.measurements) > 0:
+                # No logs; display a measurement.
+                measurement = list(self.measurements.values())[idx]
 
-            with await self.log_condition:
-                await asyncio.wait([self.log_condition.wait()], timeout=2.0)
+                self.display("{quantity} ({peripheral})\n{value:.5g} {unit}".format(
+                    peripheral = measurement.get_peripheral(),
+                    quantity = measurement.get_physical_quantity(),
+                    value = measurement.get_value(),
+                    unit = measurement.get_physical_unit()
+                ))
+
+                idx = (idx + 1) % len(self.measurements)
+
+            if len(self.log_message_queue) == 0:
+                # No remaining logs. Wait for a log notification,
+                # or for 7 seconds, whichever comes first.
+                await self.log_condition.acquire()
+                await asyncio.wait(
+                    [self.log_condition.wait(), asyncio.sleep(7.0)],
+                    return_when=concurrent.futures.FIRST_COMPLETED
+                )
 
     def add_log_message(self, msg):
         """
@@ -317,6 +340,7 @@ class Display(Peripheral):
             with await self.log_condition:
                 self.log_condition.notify()
 
+        # Block until notify is complete.
         loop = asyncio.get_event_loop()
         loop.run_until_complete(notify())
 
@@ -333,10 +357,7 @@ class Display(Peripheral):
         """
         :param m: The measurement to handle.
         """
-        type = str(m.get_peripheral())
-        value = int(m.get_value())
-        unit = str(m.get_physical_unit())
-        self.display(type + '\n' + str(value) + " " + unit)
+        self.measurements[(m.get_peripheral(), m.get_physical_quantity())] = m
         
 class DebugDisplay(Display):
     """
