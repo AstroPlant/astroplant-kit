@@ -80,8 +80,6 @@ class PeripheralManager(object):
 
         return peripheral
 
-
-
 class Peripheral(object):
     """
     Abstract peripheral device base class.
@@ -223,7 +221,6 @@ class Actuator(Peripheral):
     """
 
     RUNNABLE = False
-    
         
 class MeasurementType(object):
     """
@@ -294,11 +291,11 @@ class Display(Peripheral):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.log_message_queue = []
+        
         # Subscribe to all measurements.
         self.manager.subscribe_predicate(lambda a: True, lambda m: self.handle_measurement(m))
 
     async def run(self):
-
         while True:
             if len(self.log_message_queue) > 0:
                 msg = self.log_message_queue.pop(0)
@@ -306,7 +303,6 @@ class Display(Peripheral):
             await self._run()
 
     async def _run(self):
-
         # Async wait for new instructions
         await asyncio.sleep(0.5)
 
@@ -323,11 +319,14 @@ class Display(Peripheral):
         """
         Display a string on the device.
 
-        :self str: The string to display.
+        :param str: The string to display.
         """
         raise NotImplementedError()
 
     def handle_measurement(self, m):
+        """
+        :param m: The measurement to handle.
+        """
         type = str(m.get_peripheral())
         value = int(m.get_value())
         unit = str(m.get_physical_unit())
