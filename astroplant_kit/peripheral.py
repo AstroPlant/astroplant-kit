@@ -291,6 +291,7 @@ class Display(Peripheral):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.log_message_queue = []
+        self.log_condition = asyncio.Condition()
         
         # Subscribe to all measurements.
         self.manager.subscribe_predicate(lambda a: True, lambda m: self.handle_measurement(m))
@@ -300,11 +301,9 @@ class Display(Peripheral):
             if len(self.log_message_queue) > 0:
                 msg = self.log_message_queue.pop(0)
                 self.display(msg)
-            await self._run()
 
-    async def _run(self):
-        # Async wait for new instructions
-        await asyncio.sleep(0.5)
+            with await self.log_condition:
+                await asyncio.wait([self.log_condition.wait()], timeout=2.0)
 
     def add_log_message(self, msg):
         """
@@ -313,6 +312,13 @@ class Display(Peripheral):
         :param msg: The message to be displayed.
         """
         self.log_message_queue.append(msg)
+
+        async def notify():
+            with await self.log_condition:
+                self.log_condition.notify()
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(notify())
 
     @abc.abstractmethod
     def display(self, str):
