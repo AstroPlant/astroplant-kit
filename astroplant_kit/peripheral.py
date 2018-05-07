@@ -255,6 +255,17 @@ class Measurement(object):
 
     def get_physical_unit(self):
         return self.physical_unit
+        
+    def get_physical_unit_short(self):
+        # Todo:
+        # It's probably better to have a predefined registry of
+        # physical quantity / unit combinations, that define
+        # short names for units as well. This promotes consistency
+        # across peripheral implementations as well.
+        if (self.physical_unit == "Degrees Celsius"):
+            return "Degrees C"
+        else:
+            return self.physical_unit
 
     def get_value(self):
         return self.value
@@ -314,7 +325,7 @@ class Display(Peripheral):
                     peripheral = measurement.get_peripheral(),
                     quantity = measurement.get_physical_quantity(),
                     value = measurement.get_value(),
-                    unit = measurement.get_physical_unit()
+                    unit = measurement.get_physical_unit_short()
                 ))
 
                 idx = (idx + 1) % len(self.measurements)
