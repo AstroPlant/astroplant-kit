@@ -52,9 +52,11 @@ class Kit(object):
             logger.info("Initialising peripheral debug display device.")
             peripheral_configuration = debug_configuration['peripheral_display']
 
+            parameters = peripheral_configuration['parameters'] if ('parameters' in peripheral_configuration) else {}
+            
             self._import_modules([peripheral_configuration['module_name']])
             peripheral_class = self.peripheral_modules[peripheral_configuration['module_name']].__dict__[peripheral_configuration['class_name']]
-            peripheral_device = self.peripheral_manager.create_peripheral(peripheral_class, "Debug display device", {})
+            peripheral_device = self.peripheral_manager.create_peripheral(peripheral_class, "Debug display device", parameters)
             logger.info("Peripheral debug display device created.")
 
             log_handler = logging.StreamHandler(peripheral.DisplayDeviceStream(peripheral_device))
