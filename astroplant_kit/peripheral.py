@@ -321,10 +321,10 @@ class Display(Peripheral):
 
             if len(self.log_message_queue) == 0:
                 # No remaining logs. Wait for a log notification,
-                # or for 7 seconds, whichever comes first.
+                # or for 15 seconds, whichever comes first.
                 await self.log_condition.acquire()
                 await asyncio.wait(
-                    [self.log_condition.wait(), asyncio.sleep(7.0)],
+                    [self.log_condition.wait(), asyncio.sleep(15.0)],
                     return_when=concurrent.futures.FIRST_COMPLETED
                 )
 
