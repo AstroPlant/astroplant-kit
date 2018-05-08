@@ -264,6 +264,8 @@ class Measurement(object):
         # across peripheral implementations as well.
         if (self.physical_unit == "Degrees Celsius"):
             return "Degrees C"
+        elif (self.physical_unit == "Parts per million"):
+            return "PPM"
         else:
             return self.physical_unit
 
