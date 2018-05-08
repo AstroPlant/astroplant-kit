@@ -434,6 +434,5 @@ class LocalDataLogger(Actuator):
             if not exists:
                 # File is new: write csv header.
                 writer.writeheader()
-                
             writer.writerow(measurement_dict)
         
