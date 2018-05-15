@@ -124,10 +124,6 @@ class Kit(object):
                     # Wait until there is at least one measurement available
                     self.messages_condition.wait()
 
-                if self.halt:
-                    # The application should halt
-                    break
-
                 measurement = self.messages.pop(0)
             logger.debug('Publishing measurement to websocket: %s' % measurement)
             self.api_client.publish_measurement(measurement)
@@ -141,6 +137,7 @@ class Kit(object):
 
         # Run the API worker in a separate thread
         api_worker = threading.Thread(target=self._api_worker)
+        api_worker.daemon = True
         api_worker.start()
 
         # Run the async event loop
@@ -150,12 +147,5 @@ class Kit(object):
         except KeyboardInterrupt:
             # Request halt
             self.halt = True
-
-            # Notify potentially waiting API worker thread
-            with self.messages_condition:
-                self.messages_condition.notify()
-        finally:
-            self.event_loop.stop()
-
-        self.event_loop.close()
-        api_worker.join()
+            
+            print("HALT received...")
