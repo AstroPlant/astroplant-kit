@@ -60,7 +60,7 @@ For debugging purposes, `class_name` can be set to `DebugDisplay`, which will se
 
 To display messages on a standard I2C LCD device, you can use the following configuration (requires [`astroplant-peripheral-device-library`](https://github.com/AstroPlant/astroplant-peripheral-device-library)):
 
-```
+```json
 {
     ...,
     "debug": {
