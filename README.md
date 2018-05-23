@@ -76,7 +76,7 @@ To display messages on a standard I2C LCD device, you can use the following conf
 }
 ```
 
-Update `i2c_address` to the address used by the device.
+Set `i2c_address` to the address used by the device.
 
 # Run the kit
 
