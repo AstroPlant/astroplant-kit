@@ -378,6 +378,13 @@ class DebugDisplay(Display):
     """
     def display(self, str):
         print("Debug Display: %s" % str)
+        
+class BlackHoleDisplay(Display):
+    """
+    A trivial peripheral display device implementation ignoring all display messages.
+    """
+    def display(self, str):
+        pass
 
 class DisplayDeviceStream(object):
     """
