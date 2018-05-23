@@ -13,7 +13,7 @@
         "level": "INFO",
         "peripheral_display": {
             "module_name": "peripheral",
-            "class_name": "Display"
+            "class_name": "BlackHoleDisplay"
         }
     }
 }
