@@ -50,7 +50,7 @@ The `auth.serial` and `auth.secret` are obtained by registering a new kit on the
 
 Log messages are printed to stdout, and can additionally be sent to a peripheral device.
 The `level` field configures the minimum level of log messages that are sent to the peripheral display device.
-See the (Python documentation)[https://docs.python.org/3/library/logging.html#logging-levels] for available log levels.
+See the [Python documentation](https://docs.python.org/3/library/logging.html#logging-levels) for available log levels.
 A peripheral display device also displays recent measurements.
 
 The `peripheral_display` entry in `debug` is used to configure the peripheral device for display.
