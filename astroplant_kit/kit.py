@@ -114,9 +114,10 @@ class Kit(object):
         MAX_PENDING_MEASUREMENTS = 200
 
         with self.messages_condition:
+            self.messages.append(measurement)
+
             if len(self.messages) > MAX_PENDING_MEASUREMENTS: # Only allow buffer to grow up to a cap.
                 self.messages = self.messages[-MAX_PENDING_MEASUREMENTS:]
-            self.messages.append(measurement)
             self.messages_condition.notify()
 
     def _api_worker(self):
