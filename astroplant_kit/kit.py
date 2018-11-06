@@ -111,7 +111,11 @@ class Kit(object):
 
         :param measurement: The measurement to publish.
         """
+        MAX_PENDING_MEASUREMENTS = 200
+
         with self.messages_condition:
+            if len(self.messages) > MAX_PENDING_MEASUREMENTS: # Only allow buffer to grow up to a cap.
+                self.messages = self.messages[-MAX_PENDING_MEASUREMENTS:]
             self.messages.append(measurement)
             self.messages_condition.notify()
 
@@ -127,7 +131,15 @@ class Kit(object):
 
                 measurement = self.messages.pop(0)
             logger.debug('Publishing measurement to websocket: %s' % measurement)
-            self.api_client.publish_measurement(measurement)
+            try:
+                self.api_client.publish_measurement(measurement)
+            except:
+                time.sleep(5)
+                logger.debug("Lost websocket connection. Attempting to reconnect.")
+                try:
+                    self.api_client._open_websocket()
+                except:
+                    logger.warning("Failed to reconnect to websocket. Will keep retrying.")
 
     def run(self):
         """
