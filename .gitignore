@@ -4,6 +4,9 @@
 # Egg
 *.egg-info
 
+# IDEs
+.idea
+
 # Ignore sample client configs
 astroplant_kit/kit_config.json
 
