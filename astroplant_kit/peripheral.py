@@ -20,6 +20,7 @@ class PeripheralManager(object):
     def __init__(self):
         self.peripherals = []
         self.subscribers = []
+        self.event_loop = None
 
     def runnable_peripherals(self):
         """
@@ -31,6 +32,7 @@ class PeripheralManager(object):
         """
         Run all runnable peripherals.
         """
+        self.event_loop = asyncio.get_event_loop()
         await asyncio.wait([peripheral.run() for peripheral in self.runnable_peripherals()])
 
     def subscribe_physical_quantity(self, physical_quantity, callback):
@@ -335,11 +337,15 @@ class Display(Peripheral):
             if len(self.log_message_queue) == 0:
                 # No remaining logs. Wait for a log notification,
                 # or for 15 seconds, whichever comes first.
-                await self.log_condition.acquire()
-                await asyncio.wait(
-                    [self.log_condition.wait(), asyncio.sleep(15.0)],
-                    return_when=concurrent.futures.FIRST_COMPLETED
-                )
+                async with self.log_condition:
+                    await asyncio.wait(
+                        [self.log_condition.wait(), asyncio.sleep(15.0)],
+                        return_when=concurrent.futures.FIRST_COMPLETED
+                    )
+
+    async def _log_notify(self):
+        async with self.log_condition:
+            self.log_condition.notify()
 
     def add_log_message(self, msg):
         """
@@ -349,13 +355,11 @@ class Display(Peripheral):
         """
         self.log_message_queue.append(msg)
 
-        async def notify():
-            with await self.log_condition:
-                self.log_condition.notify()
+        def notify():
+            self.manager.event_loop.create_task(self._log_notify())
 
-        # Block until notify is complete.
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(notify())
+        if self.manager.event_loop is not None:
+            self.manager.event_loop.call_soon_threadsafe(notify)
 
     @abc.abstractmethod
     def display(self, str):

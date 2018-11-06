@@ -6,6 +6,7 @@ import signal
 import functools
 import asyncio
 import threading
+import time
 import importlib
 import logging
 from astroplant_client import Client
@@ -143,7 +144,8 @@ class Kit(object):
         # Run the async event loop
         self.event_loop = asyncio.get_event_loop()
         try:
-            self.event_loop.run_until_complete(self.peripheral_manager.run())
+            self.event_loop.create_task(self.peripheral_manager.run())
+            self.event_loop.run_forever()
         except KeyboardInterrupt:
             # Request halt
             self.halt = True
