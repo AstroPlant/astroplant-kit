@@ -134,6 +134,10 @@ class Kit(object):
             try:
                 self.api_client.publish_measurement(measurement)
             except:
+                with self.messages_condition:
+                    # Re-insert failed measurement.
+                    self.messages.insert(0, measurement)
+
                 time.sleep(5)
                 logger.debug("Lost websocket connection. Attempting to reconnect.")
                 try:
