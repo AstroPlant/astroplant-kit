@@ -337,11 +337,17 @@ class Display(Peripheral):
             if len(self.log_message_queue) == 0:
                 # No remaining logs. Wait for a log notification,
                 # or for 15 seconds, whichever comes first.
-                async with self.log_condition:
-                    await asyncio.wait(
-                        [self.log_condition.wait(), asyncio.sleep(15.0)],
-                        return_when=concurrent.futures.FIRST_COMPLETED
-                    )
+                await self.log_condition.acquire()
+
+                try:
+                    log_task = asyncio.ensure_future(self.log_condition.wait())
+                    await asyncio.wait_for(log_task, timeout=15.0)
+                except asyncio.TimeoutError:
+                    pass
+                finally:
+                    # Check whether we have acquired the condition lock (in case of timeout, we don't have the lock)
+                    if self.log_condition.locked():
+                        self.log_condition.release()
 
     async def _log_notify(self):
         async with self.log_condition:
