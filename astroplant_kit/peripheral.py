@@ -28,7 +28,7 @@ class PeripheralManager(object):
         """
         return filter(lambda peripheral: peripheral.RUNNABLE, self.peripherals)
 
-    async def run(self):
+    def run(self):
         """
         Run all runnable peripherals.
         """
