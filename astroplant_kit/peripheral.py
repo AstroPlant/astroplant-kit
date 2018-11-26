@@ -32,8 +32,8 @@ class PeripheralManager(object):
         """
         Run all runnable peripherals.
         """
-        self.event_loop = asyncio.get_event_loop()
-        await asyncio.wait([peripheral.run() for peripheral in self.runnable_peripherals()])
+        for peripheral in self.runnable_peripherals():
+            asyncio.ensure_future(peripheral.run())
 
     def subscribe_physical_quantity(self, physical_quantity, callback):
         """
