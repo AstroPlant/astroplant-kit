@@ -136,7 +136,7 @@ class Sensor(Peripheral):
     TIME_SLEEP_BETWEEN_MEASUREMENTS = 2.0
 
     #: Amount of time in seconds over which measurements are reduced before publishing them for storage
-    TIME_REDUCE_MEASUREMENTS = 1800.0
+    TIME_REDUCE_MEASUREMENTS = 3600.0
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
