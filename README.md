@@ -88,3 +88,9 @@ To run the kit, perform:
 ```bash
 ./core.py
 ```
+
+
+## Timekeeping
+Note that the kit uses the system time, and this time is reported in measurements.
+On low power devices (such as the Raspberry Pi) this system time is often wrong until the system has been running and connected to the internet for some time.
+Using systemd, you can delay running the kit until after the time has been synchronized using `time-sync.target`.
