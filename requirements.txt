@@ -1,1 +1,2 @@
 git+git://github.com/astroplant/astroplant-api-python-client.git#egg=astroplant-client
+toml~=0.10.0

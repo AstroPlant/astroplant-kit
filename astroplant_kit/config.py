@@ -1,4 +1,4 @@
-import json
+import toml
 
 def read_config():
     """
@@ -6,7 +6,7 @@ def read_config():
 
     :return: The json configuration as a dictionary.
     """
-    with open('./kit_config.json') as f:
-        data = json.load(f)
+    with open('./kit_config.toml') as f:
+        data = toml.load(f)
 
     return data

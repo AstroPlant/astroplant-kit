@@ -19,31 +19,28 @@ pip3 install -r requirements.txt
 
 The kit requires some basic configuration to function.
 
-Copy `astroplant_kit/kit_config.sample.json` to `astroplant_kit/kit_config.json` and edit the configuration.
+Copy `astroplant_kit/kit_config.sample.toml` to `astroplant_kit/kit_config.toml` and edit the configuration.
 
 For example, a basic configuration for connecting the kit to the official AstroPlant backend is as follows.
 The `auth.serial` and `auth.secret` are obtained by registering a new kit on the backend.
 
-```json
-{
-    "api": {
-        "root": "https://my.astroplant.io/api/"
-    },
-    "websockets": {
-        "url": "wss://my.astroplant.io/"
-    },
-    "auth": {
-        "serial": "k.********",
-        "secret": "********"
-    },
-    "debug": {
-        "level": "INFO",
-        "peripheral_display": {
-            "module_name": "peripheral",
-            "class_name": "BlackHoleDisplay"
-        }
-    }
-}
+```toml
+[api]
+root = "https://my.astroplant.io/api/"
+
+[websockets]
+url = "wss://my.astroplant.io/"
+
+[auth]
+serial = "k.********"
+secret = "********"
+
+[debug]
+level = "INFO"
+
+[debug.peripheral_display]
+module_name = "peripheral"
+class_name = "BlackHoleDisplay"
 ```
 
 ## Debug configuration
@@ -53,30 +50,28 @@ The `level` field configures the minimum level of log messages that are sent to 
 See the [Python documentation](https://docs.python.org/3/library/logging.html#logging-levels) for available log levels.
 A peripheral display device also displays recent measurements.
 
-The `peripheral_display` entry in `debug` is used to configure the peripheral device for display.
+The `debug.peripheral_display` entry is used to configure the peripheral device for display.
 The `module_name` field refers to a module where the implementation of the peripheral display device can be found, and `class_name` is the specific class to instantiate.
 The module and class are then dynamically imported and instantiated.
-Additional parameters can be supplied on class instantiation by adding a `parameters` fields.
+Additional parameters can be supplied on class instantiation by adding a `parameters` table.
 
 The default `BlackHoleDisplay` ignores all log messages.
 For debugging purposes, `class_name` can be set to `DebugDisplay`, which will send all display messages to stdout.
 
 To display messages on a standard I2C LCD device, you can use the following configuration (requires [`astroplant-peripheral-device-library`](https://github.com/AstroPlant/astroplant-peripheral-device-library)):
 
-```json
-{
-    ...,
-    "debug": {
-        "level": "INFO",
-        "peripheral_display": {
-            "module_name": "astroplant_peripheral_device_library.lcd",
-            "class_name": "LCD",
-            "parameters": {
-                "i2c_address": "0x27"
-            }
-        }
-    }
-}
+```toml
+# ...
+
+[debug]
+level = "INFO"
+
+[debug.peripheral_display]
+module_name = "astroplant_peripheral_device_library.lcd"
+class_name = "LCD"
+
+[debug.peripheral_display.parameters]
+i2c_address = "0x27"
 ```
 
 Set `i2c_address` to the address used by the device.
