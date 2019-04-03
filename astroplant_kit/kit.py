@@ -34,12 +34,6 @@ class Kit(object):
         except Exception as e:
             logger.error("Could not configure kit: %s" % e)
 
-        logger.info("Opening websocket.")
-        try:
-            self.api_client._open_websocket()
-        except Exception as e:
-            logger.error("Could not open websocket: %s" % e)
-
     def initialise_debug(self, debug_configuration):
         """
         Initialise debugging options from the given debug configuration dictionary.
@@ -54,7 +48,7 @@ class Kit(object):
             peripheral_configuration = debug_configuration['peripheral_display']
 
             parameters = peripheral_configuration['parameters'] if ('parameters' in peripheral_configuration) else {}
-            
+
             self._import_modules([peripheral_configuration['module_name']])
             peripheral_class = self.peripheral_modules[peripheral_configuration['module_name']].__dict__[peripheral_configuration['class_name']]
             peripheral_device = self.peripheral_manager.create_peripheral(peripheral_class, "Debug display device", parameters)
@@ -72,7 +66,13 @@ class Kit(object):
         """
         Configure the kit using the configuration fetched from the backend.
         """
-        configuration = self.api_client.configuration_path.kit_configuration().body[0]
+        # configuration = self.api_client.configuration_path.kit_configuration().body[0]
+
+        # TODO: temporary configuration loading
+        import json
+        with open('./configuration.json') as f:
+            configuration = json.load(f)[0]
+
         self.name = configuration['name']
 
         self._import_modules(configuration['modules'])
@@ -140,11 +140,7 @@ class Kit(object):
                     self.messages.insert(0, measurement)
 
                 time.sleep(5)
-                logger.debug("Lost websocket connection. Attempting to reconnect.")
-                try:
-                    self.api_client._open_websocket()
-                except:
-                    logger.warning("Failed to reconnect to websocket. Will keep retrying.")
+                logger.warning("Failed to publish a message. Will retry.")
 
     def run(self):
         """

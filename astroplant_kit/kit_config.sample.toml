@@ -1,10 +1,8 @@
-[api]
-root = "https://my.astroplant.io/api/"
+[message_broker]
+host = "mqtt.astroplant.io"
+port = 1883
 
-[websockets]
-url = "wss://my.astroplant.io/"
-
-[auth]
+[message_broker.auth]
 serial = "<INSERT KIT SERIAL HERE>"
 secret = "<INSERT KIT SECRET HERE>"
 

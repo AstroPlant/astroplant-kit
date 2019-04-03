@@ -1,0 +1,57 @@
+[
+    {
+        "name": "Virtual Test Kit 1",
+        "modules": [
+            "astroplant_simulation.sensors",
+            "peripheral"
+        ],
+        "serial": "k.8yxx78qp",
+        "peripherals": [
+            {
+                "peripheral_name": "Air temperature",
+                "parameters": {
+                    "sleep": "3000"
+                },
+                "class_name": "Temperature",
+                "peripheral_definition_name": "Virtual temperature sensor",
+                "module_name": "astroplant_simulation.sensors"
+            },
+            {
+                "peripheral_name": "Air pressure",
+                "parameters": {
+                    "sleep": "3000"
+                },
+                "class_name": "Pressure",
+                "peripheral_definition_name": "Virtual pressure sensor",
+                "module_name": "astroplant_simulation.sensors"
+            },
+            {
+                "peripheral_name": "Main barometer",
+                "parameters": {
+                    "sleep": "3000"
+                },
+                "class_name": "Barometer",
+                "peripheral_definition_name": "Virtual barometer",
+                "module_name": "astroplant_simulation.sensors"
+            },
+            {
+                "peripheral_name": "Water temperature",
+                "parameters": {
+                    "sleep": "3000"
+                },
+                "class_name": "Temperature",
+                "peripheral_definition_name": "Virtual temperature sensor",
+                "module_name": "astroplant_simulation.sensors"
+            },
+            {
+                "peripheral_name": "Data logger",
+                "parameters": {
+                    "storage_path": "./data"
+                },
+                "class_name": "LocalDataLogger",
+                "peripheral_definition_name": "Local data logger",
+                "module_name": "peripheral"
+            }
+        ]
+    }
+]

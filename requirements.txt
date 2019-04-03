@@ -1,2 +1,2 @@
-git+git://github.com/astroplant/astroplant-api-python-client.git#egg=astroplant-client
+paho-mqtt~=1.4.0
 toml~=0.10.0

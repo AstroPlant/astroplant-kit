@@ -22,16 +22,14 @@ The kit requires some basic configuration to function.
 Copy `astroplant_kit/kit_config.sample.toml` to `astroplant_kit/kit_config.toml` and edit the configuration.
 
 For example, a basic configuration for connecting the kit to the official AstroPlant backend is as follows.
-The `auth.serial` and `auth.secret` are obtained by registering a new kit on the backend.
+The `message_broker.auth.serial` and `message_broker.auth.secret` are obtained by registering a new kit on the backend.
 
 ```toml
-[api]
-root = "https://my.astroplant.io/api/"
+[message_broker]
+host = "mqtt.astroplant.io"
+port = 1883
 
-[websockets]
-url = "wss://my.astroplant.io/"
-
-[auth]
+[message_broker.auth]
 serial = "k.********"
 secret = "********"
 
