@@ -8,7 +8,7 @@
 .idea
 
 # Ignore sample client configs
-astroplant_kit/kit_config.json
+astroplant_kit/kit_config.toml
 
 # Ignore output
 astroplant_kit/data
