@@ -140,13 +140,13 @@ class Kit(object):
                     self.api_client.publish_stream_measurement(measurement)
                 else:
                     self.api_client.publish_aggregate_measurement(measurement)
-            except:
+            except Exception as e:
                 with self.messages_condition:
                     # Re-insert failed measurement.
                     self.messages.insert(0, measurement)
 
                 time.sleep(5)
-                logger.warning("Failed to publish measurement. Will retry.")
+                logger.warning(f"Failed to publish measurement. Will retry. Original exception: {e}")
 
     def run(self):
         """
