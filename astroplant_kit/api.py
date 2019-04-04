@@ -36,9 +36,15 @@ class Client(object):
         self._mqtt_client.connect_async(host=host, port=port, keepalive=keepalive)
 
     def start(self):
+        """
+        Start the client background thread.
+        """
         self._mqtt_client.loop_start()
 
     def stop(self):
+        """
+        Stop the client background thread.
+        """
         self._mqtt_client.loop_stop()
 
     def _on_connect(self, client, user_data, flags, rc):
@@ -52,6 +58,9 @@ class Client(object):
         payload = msg.payload
 
     def publish_stream_measurement(self, measurement):
+        """
+        Publish a (real-time) stream measurement.
+        """
         msg = BytesIO()
         fastavro.schemaless_writer(
             msg,
@@ -71,6 +80,9 @@ class Client(object):
         )
 
     def publish_aggregate_measurement(self, measurement):
+        """
+        Publish an aggregate measurement.
+        """
         msg = BytesIO()
         fastavro.schemaless_writer(
             msg,
