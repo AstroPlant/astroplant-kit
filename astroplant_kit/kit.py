@@ -131,16 +131,22 @@ class Kit(object):
                     self.messages_condition.wait()
 
                 measurement = self.messages.pop(0)
-            logger.debug('Publishing measurement to websocket: %s' % measurement)
+
+            logger.debug('Publishing measurement: %s' % measurement)
+            # TODO: perhaps messsages should not be retried, and instead the API client
+            # stores failed messages in the filesystem locally for intermittent retry.
             try:
-                self.api_client.publish_measurement(measurement)
+                if measurement.aggregate_type is None:
+                    self.api_client.publish_stream_measurement(measurement)
+                else:
+                    self.api_client.publish_aggregate_measurement(measurement)
             except:
                 with self.messages_condition:
                     # Re-insert failed measurement.
                     self.messages.insert(0, measurement)
 
                 time.sleep(5)
-                logger.warning("Failed to publish a message. Will retry.")
+                logger.warning("Failed to publish measurement. Will retry.")
 
     def run(self):
         """

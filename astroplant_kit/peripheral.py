@@ -42,7 +42,7 @@ class PeripheralManager(object):
         :param physical_quantity: The name of the physical quantity for which the measurements are being subscribed to.
         :param callback: The callback to call with the measurement.
         """
-        self.subscribe_predicate(lambda measurement: measurement.get_physical_quantity() == physical_quantity, callback)
+        self.subscribe_predicate(lambda measurement: measurement.physical_quantity == physical_quantity, callback)
 
     def subscribe_predicate(self, predicate, callback):
         """
@@ -141,6 +141,24 @@ class Sensor(Peripheral):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.measurements = []
+        self.reducers = [
+            {
+                'name': 'count',
+                'fn': lambda values: len(values)
+            },
+            {
+                'name': 'average',
+                'fn': lambda values: sum(values) / len(values),
+            },
+            {
+                'name': 'minimum',
+                'fn': lambda values: min(values)
+            },
+            {
+                'name': 'maximum',
+                'fn': lambda values: max(values)
+            }
+        ]
 
     async def run(self):
         await asyncio.wait([self._make_measurements(), self._reduce_measurements()])
@@ -171,19 +189,30 @@ class Sensor(Peripheral):
         Repeatedly reduce multiple measurements made to a single measurement.
         """
         while True:
+            start_datetime = datetime.datetime.utcnow()
+
+            await asyncio.sleep(self.TIME_REDUCE_MEASUREMENTS)
+
             self.logger.debug("Reducing measurements. %s" % len(self.measurements))
 
             # Group measurements by physical quantity and unit
             grouped_measurements = collections.defaultdict(list)
             for measurement in self.measurements:
-                grouped_measurements[(measurement.get_physical_quantity(), measurement.get_physical_unit())].append(measurement)
+                grouped_measurements[(measurement.physical_quantity, measurement.physical_unit)].append(measurement)
 
-            # Empty list
+            # Emty the list
             self.measurements = []
+
+            end_datetime = datetime.datetime.utcnow()
 
             # Produce list of reduced measurements
             try:
-                reduced_measurements = [self.reduce(val) for (key, val) in grouped_measurements.items()]
+                reduced_measurements = [
+                    aggregate
+                    for (_, val) in grouped_measurements.items()
+                    for aggregate in self.reduce(val, start_datetime, end_datetime)
+                ]
+
             except Exception as e:
                 self.logger.error("Could not reduce measurements: %s" % e)
                 return
@@ -192,8 +221,6 @@ class Sensor(Peripheral):
             for reduced_measurement in reduced_measurements:
                 asyncio.ensure_future(self._publish_measurement(reduced_measurement))
 
-            await asyncio.sleep(self.TIME_REDUCE_MEASUREMENTS)
-
     @abc.abstractmethod
     async def measure(self):
         raise NotImplementedError()
@@ -201,22 +228,32 @@ class Sensor(Peripheral):
     async def _publish_measurement(self, measurement):
         self._publish_handle(measurement)
 
-    def reduce(self, measurements):
+    def reduce(self, measurements, start_datetime, end_datetime):
         """
-        Reduce a list of measurements to a single measurement.
+        Reduce a list of measurements to aggregates.
 
         :param measurements: The list of measurements to reduce.
-        :return: A single measurement, or None
+        :param start_datetime: The aggregate window start date and time.
+        :param end_datetime: The aggregate window end date and time.
+        :return: A list of aggregates.
         """
         if not measurements:
-            return None
+            return []
 
-        values = list(map(lambda m: m.get_value(), measurements))
-        avg_value = sum(values) / len(values)
+        values = list(map(lambda m: m.value, measurements))
 
-        # Make a new measurement based on the old measurements
-        measurement = measurements[0]
-        return Measurement(measurement.get_peripheral(), measurement.get_physical_quantity(), measurement.get_physical_unit(), avg_value, measurement_type = MeasurementType.REDUCED)
+        return [
+            Measurement(
+                measurements[0].peripheral,
+                measurements[0].physical_quantity,
+                measurements[0].physical_unit,
+                reducer['fn'](values),
+                start_datetime=start_datetime,
+                end_datetime=end_datetime,
+                aggregate_type=reducer['name']
+            )
+            for reducer in self.reducers
+        ]
 
 class Actuator(Peripheral):
     """
@@ -224,39 +261,29 @@ class Actuator(Peripheral):
     """
 
     RUNNABLE = False
-        
-class MeasurementType(object):
-    """
-    Class holding the possible types of measurements.
-    """
-
-    #: A real-time measurement
-    REAL_TIME = "REAL_TIME"
-
-    #: A reduced measurement (e.g. an average over a longer time window)
-    REDUCED = "REDUCED"
 
 class Measurement(object):
     """
     Measurement class.
     """
 
-    def __init__(self, peripheral, physical_quantity, physical_unit, value, measurement_type=MeasurementType.REAL_TIME):
+    def __init__(
+            self,
+            peripheral,
+            physical_quantity,
+            physical_unit,
+            value,
+            start_datetime = None,
+            end_datetime = None,
+            aggregate_type = None
+    ):
         self.peripheral = peripheral
         self.physical_quantity = physical_quantity
         self.physical_unit = physical_unit
         self.value = value
-        self.date_time = datetime.datetime.utcnow()
-        self.measurement_type = measurement_type
-
-    def get_peripheral(self):
-        return self.peripheral
-
-    def get_physical_quantity(self):
-        return self.physical_quantity
-
-    def get_physical_unit(self):
-        return self.physical_unit
+        self.start_datetime = start_datetime or datetime.datetime.utcnow()
+        self.end_datetime = end_datetime or datetime.datetime.utcnow()
+        self.aggregate_type = aggregate_type
         
     def get_physical_unit_short(self):
         # Todo:
@@ -271,29 +298,8 @@ class Measurement(object):
         else:
             return self.physical_unit
 
-    def get_value(self):
-        return self.value
-
-    def get_date_time(self):
-        return self.date_time
-
-    def get_measurement_type(self):
-        return self.measurement_type
-
-    """
-    def dict(self):
-        return {
-            'peripheral': self.peripheral,
-            'physical_quantity': self.physical_quantity,
-            'physical_unit': self.physical_unit,
-            'value': self.value,
-            'date_time': self.date_time,
-            'measurement_type': self.measurement_type
-        }
-    """
-        
     def __str__(self):
-        return "%s - %s %s: %s %s" % (self.date_time, self.peripheral, self.physical_quantity, self.value, self.physical_unit)
+        return "%s-%s - %s %s %s: %s %s" % (self.start_datetime, self.end_datetime, self.aggregate_type, self.peripheral, self.physical_quantity, self.value, self.physical_unit)
 
 class Display(Peripheral):
     """
@@ -326,9 +332,9 @@ class Display(Peripheral):
                 measurement = list(self.measurements.values())[idx]
 
                 self.display("{quantity} ({peripheral})\n{value:.5g} {unit}".format(
-                    peripheral = measurement.get_peripheral(),
-                    quantity = measurement.get_physical_quantity(),
-                    value = measurement.get_value(),
+                    peripheral = measurement.peripheral,
+                    quantity = measurement.physical_quantity,
+                    value = measurement.value,
                     unit = measurement.get_physical_unit_short()
                 ))
 
@@ -380,7 +386,7 @@ class Display(Peripheral):
         """
         :param m: The measurement to handle.
         """
-        self.measurements[(m.get_peripheral(), m.get_physical_quantity())] = m
+        self.measurements[(m.peripheral, m.physical_quantity)] = m
         
 class DebugDisplay(Display):
     """
@@ -420,10 +426,11 @@ class LocalDataLogger(Actuator):
         super().__init__(*args, **kwargs)
         self.storage_path = storage_path
         
-        # Subscribe to all REDUCED (processed) measurements.
+        # Subscribe to all aggregate measurements.
         self.manager.subscribe_predicate(
-            lambda m: m.measurement_type == MeasurementType.REDUCED,
-            self._store_measurement);
+            lambda m: m.aggregate_type is not None,
+            self._store_measurement
+        );
         
     def _store_measurement(self, measurement):
         # Import required modules.
@@ -432,7 +439,7 @@ class LocalDataLogger(Actuator):
     
         measurement_dict = measurement.__dict__
     
-        file_name = "%s-%s.csv" % (measurement.date_time.strftime("%Y%m%d"), measurement.physical_quantity)
+        file_name = "%s-%s.csv" % (measurement.end_datetime.strftime("%Y%m%d"), measurement.physical_quantity)
         path = os.path.join(self.storage_path, file_name)
         
         # Check whether the file exists.

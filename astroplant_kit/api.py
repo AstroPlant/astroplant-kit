@@ -43,15 +43,28 @@ class Client(object):
         topic = msg.topic
         payload = msg.payload
 
-    def publish_measurement(self, measurement):
+    def publish_stream_measurement(self, measurement):
         self._mqtt_client.publish(
-            topic = f"kit/{self.serial}/measurement",
+            topic = f"kit/{self.serial}/measurements/stream",
             payload = json.dumps ({
-                'peripheral': measurement.get_peripheral().get_name(),
-                'physical_quantity': measurement.get_physical_quantity(),
-                'physical_unit': measurement.get_physical_unit(),
-                'date_time': measurement.get_date_time().isoformat() + 'Z',
-                'value': measurement.get_value()
+                'peripheral': measurement.peripheral.get_name(),
+                'physical_quantity': measurement.physical_quantity,
+                'physical_unit': measurement.physical_unit,
+                'datetime': measurement.start_datetime.isoformat() + 'Z',
+                'value': measurement.value
             })
         )
 
+    def publish_aggregate_measurement(self, measurement):
+        self._mqtt_client.publish(
+            topic = f"kit/{self.serial}/measurements/aggregate",
+            payload = json.dumps ({
+                'peripheral': measurement.peripheral.get_name(),
+                'physical_quantity': measurement.physical_quantity,
+                'physical_unit': measurement.physical_unit,
+                'start_datetime': measurement.start_datetime.isoformat() + 'Z',
+                'end_datetime': measurement.end_datetime.isoformat() + 'Z',
+                'type': measurement.aggregate_type,
+                'value': measurement.value
+            })
+        )
