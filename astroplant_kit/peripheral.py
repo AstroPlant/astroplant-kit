@@ -265,6 +265,9 @@ class Actuator(Peripheral):
 class Measurement(object):
     """
     Measurement class.
+
+    Note that in general for non-aggregate measurements `start_datetime`
+    need not be defined.
     """
 
     def __init__(
@@ -281,7 +284,7 @@ class Measurement(object):
         self.physical_quantity = physical_quantity
         self.physical_unit = physical_unit
         self.value = value
-        self.start_datetime = start_datetime or datetime.datetime.utcnow()
+        self.start_datetime = start_datetime
         self.end_datetime = end_datetime or datetime.datetime.utcnow()
         self.aggregate_type = aggregate_type
         
