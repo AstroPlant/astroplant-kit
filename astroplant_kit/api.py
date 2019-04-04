@@ -1,5 +1,7 @@
 import paho.mqtt.client as mqtt
 import json
+import fastavro
+from io import BytesIO
 import logging
 
 logger = logging.getLogger("AstroPlant")
@@ -18,6 +20,12 @@ class Client(object):
         self._mqtt_client.on_message = self._on_message
         
         self._mqtt_client.reconnect_delay_set(min_delay=1, max_delay=128)
+
+        with open('./schema/aggregate.avsc', 'r') as f:
+            self._aggregate_schema = fastavro.parse_schema(json.load(f))
+
+        with open('./schema/stream.avsc', 'r') as f:
+            self._stream_schema = fastavro.parse_schema(json.load(f))
 
         if auth:
             self.serial = auth['serial']
@@ -44,27 +52,41 @@ class Client(object):
         payload = msg.payload
 
     def publish_stream_measurement(self, measurement):
-        self._mqtt_client.publish(
-            topic = f"kit/{self.serial}/measurements/stream",
-            payload = json.dumps ({
+        msg = BytesIO()
+        fastavro.schemaless_writer(
+            msg,
+            self._stream_schema,
+            {
                 'peripheral': measurement.peripheral.get_name(),
                 'physical_quantity': measurement.physical_quantity,
                 'physical_unit': measurement.physical_unit,
-                'datetime': measurement.start_datetime.isoformat() + 'Z',
+                'datetime': round(measurement.end_datetime.timestamp() * 1000),
                 'value': measurement.value
-            })
+            }
+        )
+
+        self._mqtt_client.publish(
+            topic = f"kit/{self.serial}/measurements/stream",
+            payload = msg.getvalue()
         )
 
     def publish_aggregate_measurement(self, measurement):
-        self._mqtt_client.publish(
-            topic = f"kit/{self.serial}/measurements/aggregate",
-            payload = json.dumps ({
+        msg = BytesIO()
+        fastavro.schemaless_writer(
+            msg,
+            self._aggregate_schema,
+            {
                 'peripheral': measurement.peripheral.get_name(),
                 'physical_quantity': measurement.physical_quantity,
                 'physical_unit': measurement.physical_unit,
-                'start_datetime': measurement.start_datetime.isoformat() + 'Z',
-                'end_datetime': measurement.end_datetime.isoformat() + 'Z',
+                'start_datetime': round(measurement.start_datetime.timestamp() * 1000),
+                'end_datetime': round(measurement.end_datetime.timestamp() * 1000),
                 'type': measurement.aggregate_type,
                 'value': measurement.value
-            })
+            }
+        )
+
+        self._mqtt_client.publish(
+            topic = f"kit/{self.serial}/measurements/aggregate",
+            payload = msg.getvalue()
         )

@@ -1,0 +1,32 @@
+{
+    "fields": [
+        {
+            "doc": "Date and time of the measurement in ISO8601 format.",
+            "name": "datetime",
+            "type": "long",
+            "logicalType": "timestamp-millis"
+        },
+        {
+            "doc": "Identifier of the peripheral that made the measurement.",
+            "name": "peripheral",
+            "type": "string"
+        },
+        {
+            "doc": "Physical quantity of the measurement (e.g. Temperature).",
+            "name": "physical_quantity",
+            "type": "string"
+        },
+        {
+            "doc": "Physical unit of the measurement (e.g. Degrees Celsius).",
+            "name": "physical_unit",
+            "type": "string"
+        },
+        {
+            "doc": "The measurement value.",
+            "name": "value",
+            "type": "double"
+        }
+    ],
+    "name": "MeasurementRecord",
+    "type": "record"
+}
