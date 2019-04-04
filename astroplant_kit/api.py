@@ -76,7 +76,8 @@ class Client(object):
 
         self._mqtt_client.publish(
             topic = f"kit/{self.serial}/measurements/stream",
-            payload = msg.getvalue()
+            payload = msg.getvalue(),
+            qos = 0 # Deliver at most once.
         )
 
     def publish_aggregate_measurement(self, measurement):
@@ -100,5 +101,6 @@ class Client(object):
 
         self._mqtt_client.publish(
             topic = f"kit/{self.serial}/measurements/aggregate",
-            payload = msg.getvalue()
+            payload = msg.getvalue(),
+            qos = 2 # Deliver exactly once. Maybe downgrade to `1`: deliver at least once.
         )
