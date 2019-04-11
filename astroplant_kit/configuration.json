@@ -8,7 +8,7 @@
         "serial": "k.8yxx78qp",
         "peripherals": [
             {
-                "peripheral_name": "Air temperature",
+                "peripheral_name": "Virtual temperature",
                 "parameters": {
                     "sleep": "3000"
                 },
@@ -17,7 +17,7 @@
                 "module_name": "astroplant_simulation.sensors"
             },
             {
-                "peripheral_name": "Air pressure",
+                "peripheral_name": "Virtual pressure",
                 "parameters": {
                     "sleep": "3000"
                 },
@@ -26,21 +26,12 @@
                 "module_name": "astroplant_simulation.sensors"
             },
             {
-                "peripheral_name": "Main barometer",
+                "peripheral_name": "Virtual barometer",
                 "parameters": {
                     "sleep": "3000"
                 },
                 "class_name": "Barometer",
                 "peripheral_definition_name": "Virtual barometer",
-                "module_name": "astroplant_simulation.sensors"
-            },
-            {
-                "peripheral_name": "Water temperature",
-                "parameters": {
-                    "sleep": "3000"
-                },
-                "class_name": "Temperature",
-                "peripheral_definition_name": "Virtual temperature sensor",
                 "module_name": "astroplant_simulation.sensors"
             },
             {
