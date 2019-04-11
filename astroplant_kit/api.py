@@ -75,7 +75,7 @@ class Client(object):
         )
 
         self._mqtt_client.publish(
-            topic = f"kit/{self.serial}/measurements/stream",
+            topic = f"kit/{self.serial}/measurement/stream",
             payload = msg.getvalue(),
             qos = 0 # Deliver at most once.
         )
@@ -89,6 +89,7 @@ class Client(object):
             msg,
             self._aggregate_schema,
             {
+                'kit_serial': '', # Filled on the backend-side for security reasons.
                 'peripheral': measurement.peripheral.get_name(),
                 'physical_quantity': measurement.physical_quantity,
                 'physical_unit': measurement.physical_unit,
@@ -100,7 +101,7 @@ class Client(object):
         )
 
         self._mqtt_client.publish(
-            topic = f"kit/{self.serial}/measurements/aggregate",
+            topic = f"kit/{self.serial}/measurement/aggregate",
             payload = msg.getvalue(),
             qos = 2 # Deliver exactly once. Maybe downgrade to `1`: deliver at least once.
         )
