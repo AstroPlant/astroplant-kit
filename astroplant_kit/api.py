@@ -4,7 +4,7 @@ import fastavro
 from io import BytesIO
 import logging
 
-logger = logging.getLogger("AstroPlant")
+logger = logging.getLogger("AstroPlant.api")
 
 class Client(object):
     """
@@ -13,12 +13,12 @@ class Client(object):
 
     def __init__(self, host, port, keepalive=60, auth={}):
         self.connected = False
-        
+
         self._mqtt_client = mqtt.Client()
         self._mqtt_client.on_connect = self._on_connect
         self._mqtt_client.on_disconnect = self._on_disconnect
         self._mqtt_client.on_message = self._on_message
-        
+
         self._mqtt_client.reconnect_delay_set(min_delay=1, max_delay=128)
 
         with open('./schema/aggregate.avsc', 'r') as f:
@@ -32,7 +32,8 @@ class Client(object):
             self._mqtt_client.username_pw_set(username=auth['serial'], password=auth['secret'])
         else:
             self.serial = 'anon'
-        
+
+        logger.debug(f"Connecting to MQTT broker at {host}:{port}.")
         self._mqtt_client.connect_async(host=host, port=port, keepalive=keepalive)
 
     def start(self):
@@ -48,9 +49,11 @@ class Client(object):
         self._mqtt_client.loop_stop()
 
     def _on_connect(self, client, user_data, flags, rc):
+        logger.info("Connected.")
         self.connected = True
 
     def _on_disconnect(self, client, user_data, rc):
+        logger.info("Disconnected.")
         self.connected = False
 
     def _on_message(self, client, user_data, msg):
