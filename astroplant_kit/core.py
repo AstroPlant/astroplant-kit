@@ -39,11 +39,11 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error('Exception while reading configuration: %s' % e)
         sys.exit(e.errno)
-    
+
     logger.info('Creating AstroPlant network client.')
     api_client = Client(**conf["message_broker"])
     api_client.start()
-    
+
     logger.info('Initialising kit.')
     kit = Kit(api_client, conf["debug"])
     kit.run()
