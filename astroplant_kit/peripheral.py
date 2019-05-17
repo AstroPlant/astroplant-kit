@@ -124,7 +124,7 @@ class Peripheral(object):
 
     def __str__(self):
         return self.name
-        
+
 class Sensor(Peripheral):
     """
     Abstract sensor base class.
@@ -287,7 +287,7 @@ class Measurement(object):
         self.start_datetime = start_datetime
         self.end_datetime = end_datetime or datetime.datetime.utcnow()
         self.aggregate_type = aggregate_type
-        
+
     def get_physical_unit_short(self):
         # Todo:
         # It's probably better to have a predefined registry of
@@ -318,7 +318,7 @@ class Display(Peripheral):
         self.log_message_queue = []
         self.log_condition = asyncio.Condition()
         self.measurements = {}
-        
+
         # Subscribe to all measurements.
         self.manager.subscribe_predicate(lambda a: True, lambda m: self.handle_measurement(m))
 
@@ -390,14 +390,14 @@ class Display(Peripheral):
         :param m: The measurement to handle.
         """
         self.measurements[(m.peripheral, m.physical_quantity)] = m
-        
+
 class DebugDisplay(Display):
     """
     A trivial peripheral display device implementation printing messages to the terminal.
     """
     def display(self, str):
         print("Debug Display: %s" % str)
-        
+
 class BlackHoleDisplay(Display):
     """
     A trivial peripheral display device implementation ignoring all display messages.
@@ -424,42 +424,41 @@ class LocalDataLogger(Actuator):
     """
     A virtual peripheral device writing observations to internal storage.
     """
-    
+
     def __init__(self, *args, storage_path, **kwargs):
         super().__init__(*args, **kwargs)
         self.storage_path = storage_path
-        
+
         # Subscribe to all aggregate measurements.
         self.manager.subscribe_predicate(
             lambda m: m.aggregate_type is not None,
             self._store_measurement
         );
-        
+
     def _store_measurement(self, measurement):
         # Import required modules.
         import csv
         import os
-    
+
         measurement_dict = measurement.__dict__
-    
+
         file_name = "%s-%s.csv" % (measurement.end_datetime.strftime("%Y%m%d"), measurement.physical_quantity)
         path = os.path.join(self.storage_path, file_name)
-        
+
         # Check whether the file exists.
         exists = os.path.isfile(path)
-        
+
         # Create file and directories if it does not exist yet.
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        
+
         with open(path, 'a', newline='') as csv_file:
             # Get the measurement object field names.
             # Sort them to ensure csv headers have
             # consistent field ordering.
             field_names = sorted(measurement_dict.keys())
             writer = csv.DictWriter(csv_file, fieldnames=field_names)
-            
+
             if not exists:
                 # File is new: write csv header.
                 writer.writeheader()
             writer.writerow(measurement_dict)
-        

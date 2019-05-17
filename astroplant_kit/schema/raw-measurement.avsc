@@ -1,6 +1,11 @@
 {
     "fields": [
         {
+            "doc": "Kit serial.",
+            "name": "kit_serial",
+            "type": "string"
+        },
+        {
             "doc": "Date and time of the measurement in ISO8601 format.",
             "name": "datetime",
             "type": "long",

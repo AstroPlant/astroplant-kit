@@ -137,7 +137,7 @@ class Kit(object):
             # stores failed messages in the filesystem locally for intermittent retry.
             try:
                 if measurement.aggregate_type is None:
-                    self.api_client.publish_stream_measurement(measurement)
+                    self.api_client.publish_raw_measurement(measurement)
                 else:
                     self.api_client.publish_aggregate_measurement(measurement)
             except Exception as e:
@@ -168,5 +168,5 @@ class Kit(object):
         except KeyboardInterrupt:
             # Request halt
             self.halt = True
-            
+
             print("HALT received...")

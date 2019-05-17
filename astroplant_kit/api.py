@@ -21,11 +21,11 @@ class Client(object):
 
         self._mqtt_client.reconnect_delay_set(min_delay=1, max_delay=128)
 
-        with open('./schema/aggregate.avsc', 'r') as f:
+        with open('./schema/aggregate-measurement.avsc', 'r') as f:
             self._aggregate_schema = fastavro.parse_schema(json.load(f))
 
-        with open('./schema/stream.avsc', 'r') as f:
-            self._stream_schema = fastavro.parse_schema(json.load(f))
+        with open('./schema/raw-measurement.avsc', 'r') as f:
+            self._raw_schema = fastavro.parse_schema(json.load(f))
 
         if auth:
             self.serial = auth['serial']
@@ -60,15 +60,17 @@ class Client(object):
         topic = msg.topic
         payload = msg.payload
 
-    def publish_stream_measurement(self, measurement):
+    def publish_raw_measurement(self, measurement):
         """
-        Publish a (real-time) stream measurement.
+        Publish a (real-time) raw measurement.
         """
+        logger.debug(f"Sending raw measurement: {measurement.__dict__}")
         msg = BytesIO()
         fastavro.schemaless_writer(
             msg,
-            self._stream_schema,
+            self._raw_schema,
             {
+                'kit_serial': '', # Filled on the backend-side for security reasons.
                 'peripheral': measurement.peripheral.get_name(),
                 'physical_quantity': measurement.physical_quantity,
                 'physical_unit': measurement.physical_unit,
@@ -78,7 +80,7 @@ class Client(object):
         )
 
         self._mqtt_client.publish(
-            topic = f"kit/{self.serial}/measurement/stream",
+            topic = f'kit/{self.serial}/measurement/raw',
             payload = msg.getvalue(),
             qos = 0 # Deliver at most once.
         )
@@ -87,6 +89,7 @@ class Client(object):
         """
         Publish an aggregate measurement.
         """
+        logger.debug(f"Sending aggregate measurement: {measurement.__dict__}")
         msg = BytesIO()
         fastavro.schemaless_writer(
             msg,
@@ -104,7 +107,7 @@ class Client(object):
         )
 
         self._mqtt_client.publish(
-            topic = f"kit/{self.serial}/measurement/aggregate",
+            topic = f'kit/{self.serial}/measurement/aggregate',
             payload = msg.getvalue(),
             qos = 2 # Deliver exactly once. Maybe downgrade to `1`: deliver at least once.
         )
