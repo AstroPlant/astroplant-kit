@@ -33,6 +33,9 @@ class Client(object):
         else:
             self.serial = 'anon'
 
+        logger.warn("TODO FIX serial")
+        self.serial = "k_develop"
+
         logger.debug(f"Connecting to MQTT broker at {host}:{port}.")
         self._mqtt_client.connect_async(host=host, port=port, keepalive=keepalive)
 
