@@ -1,12 +1,9 @@
 import toml
 
-def read_config():
+def read_config(file):
     """
-    Read the configuration file at './kit_config.toml'.
+    Read the configuration file.
 
     :return: The TOML configuration as a dictionary.
     """
-    with open('./kit_config.toml') as f:
-        data = toml.load(f)
-
-    return data
+    return toml.load(file)

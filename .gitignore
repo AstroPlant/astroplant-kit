@@ -1,5 +1,7 @@
 # Build artifacts
 *.py[cod]
+build
+dist
 
 # Egg
 *.egg-info
@@ -8,7 +10,7 @@
 .idea
 
 # Ignore sample client configs
-astroplant_kit/kit_config.toml
+kit_config.toml
 
 # Ignore output
-astroplant_kit/data
+data

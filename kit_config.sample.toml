@@ -10,5 +10,5 @@ secret = "<INSERT KIT SECRET HERE>"
 level = "INFO"
 
 [debug.peripheral_display]
-module_name = "peripheral"
+module_name = "astroplant_kit.peripheral"
 class_name = "BlackHoleDisplay"

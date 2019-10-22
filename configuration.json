@@ -3,7 +3,7 @@
         "name": "Virtual Test Kit 1",
         "modules": [
             "astroplant_simulation.sensors",
-            "peripheral"
+            "astroplant_kit.peripheral"
         ],
         "serial": "k.8yxx78qp",
         "peripherals": [
@@ -41,7 +41,7 @@
                 },
                 "class_name": "LocalDataLogger",
                 "peripheral_definition_name": "Local data logger",
-                "module_name": "peripheral"
+                "module_name": "astroplant_kit.peripheral"
             }
         ]
     }

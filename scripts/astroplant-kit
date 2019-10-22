@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import logging
+import click
+
+logger = logging.getLogger("astroplant_kit")
+logger.setLevel(logging.DEBUG)
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.getLevelName(os.environ.get('LOG_LEVEL', 'DEBUG')))
+
+formatter = logging.Formatter(
+    '%(asctime)s - %(threadName)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
+def version():
+    import astroplant_kit
+    print(astroplant_kit.__version__)
+
+
+@cli.command()
+@click.argument('config-file', type=click.File('r'), default="./kit_config.toml")
+def run(config_file):
+    """
+    Run the AstroPlant kit.
+
+    CONFIG_FILE is the configuration file to be used, defaulting to `./kit_config.toml`.
+    """
+    import astroplant_kit.config
+    from astroplant_kit.api import Client
+    from astroplant_kit.kit import Kit
+
+    logger.info('Reading configuration.')
+    try:
+        conf = astroplant_kit.config.read_config(config_file)
+    except Exception as e:
+        logger.error('Exception while reading configuration: %s' % e)
+        sys.exit(e.errno)
+
+    logger.info('Creating AstroPlant network client.')
+    api_client = Client(**conf["message_broker"])
+    api_client.start()
+
+    logger.info('Initialising kit.')
+    kit = Kit(api_client, conf["debug"])
+    kit.run()
+
+
+cli()

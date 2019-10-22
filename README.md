@@ -7,22 +7,42 @@ The AstroPlant kits communicate with the AstroPlant [back-end](https://github.co
 
 Full documentation can be found [here](https://astroplant-kit.readthedocs.io/en/latest/index.html).
 
-# Install kit dependencies
+# Install the kit
 
-Install the kit dependencies:
+To install the kit through setuptools, run
 
 ```bash
-pip3 install -r requirements.txt
+$ python setup.py install
+```
+
+This installs the AstroPlant kit on your system, allowing you to use the AstroPlant kit CLI through:
+
+```bash
+$ astroplant-kit --help
+```
+
+# Install kit dependencies through pip
+
+To install the kit dependencies through pip, run
+
+```bash
+$ pip3 install -r requirements.txt
+```
+
+This allows you to use the AstroPlant kit CLI through:
+
+```bash
+$ ./scripts/astroplant-kit --help
 ```
 
 # Configure AstroPlant
 
 The kit requires some basic configuration to function.
 
-Copy `astroplant_kit/kit_config.sample.toml` to `astroplant_kit/kit_config.toml` and edit the configuration.
+Copy `kit_config.sample.toml` to `kit_config.toml` and edit the configuration.
 
-For example, a basic configuration for connecting the kit to the official AstroPlant backend is as follows.
-The `message_broker.auth.serial` and `message_broker.auth.secret` are obtained by registering a new kit on the backend.
+For example, a basic configuration for connecting the kit to the official AstroPlant network is as follows.
+The `message_broker.auth.serial` and `message_broker.auth.secret` are obtained by registering a new kit on the [My AstroPlant website](https://my.astroplant.io).
 
 ```toml
 [message_broker]
@@ -37,7 +57,7 @@ secret = "********"
 level = "INFO"
 
 [debug.peripheral_display]
-module_name = "peripheral"
+module_name = "astroplant_kit.peripheral"
 class_name = "BlackHoleDisplay"
 ```
 
@@ -79,9 +99,14 @@ Set `i2c_address` to the address used by the device.
 To run the kit, perform:
 
 ```bash
-./core.py
+$ astroplant-kit run kit_config.toml
 ```
 
+or
+
+```bash
+$ ./scripts/astroplant-kit run kit_config.toml
+```
 
 ## Timekeeping
 Note that the kit uses the system time, and this time is reported in measurements.
