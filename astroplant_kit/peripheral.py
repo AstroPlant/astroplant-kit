@@ -7,7 +7,7 @@ import concurrent.futures
 import logging
 import collections
 
-logger = logging.getLogger("AstroPlant")
+logger = logging.getLogger("astroplant_kit.peripheral")
 
 class PeripheralManager(object):
     """

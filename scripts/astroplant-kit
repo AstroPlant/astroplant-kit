@@ -38,9 +38,11 @@ def run(config_file):
 
     CONFIG_FILE is the configuration file to be used, defaulting to `./kit_config.toml`.
     """
+    import asyncio
     import astroplant_kit.config
     from astroplant_kit.api import Client
     from astroplant_kit.kit import Kit
+    from astroplant_kit.kit_rpc import KitRpc
 
     logger.info('Reading configuration.')
     try:
@@ -50,11 +52,19 @@ def run(config_file):
         sys.exit(e.errno)
 
     logger.info('Creating AstroPlant network client.')
-    api_client = Client(**conf["message_broker"])
-    api_client.start()
+
+    event_loop = asyncio.get_event_loop()
+
+    api_client = Client(event_loop, **conf["message_broker"])
 
     logger.info('Initialising kit.')
-    kit = Kit(api_client, conf["debug"])
+    kit = Kit(event_loop, api_client, conf["debug"])
+
+    kit_rpc = KitRpc(event_loop, kit)
+
+    api_client.register_kit_rpc_handler(kit_rpc)
+
+    api_client.start()
     kit.run()
 
 

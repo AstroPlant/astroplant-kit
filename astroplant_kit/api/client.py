@@ -1,31 +1,34 @@
+import asyncio
 import paho.mqtt.client as mqtt
 import json
-import fastavro
 from io import BytesIO
 import logging
 
-logger = logging.getLogger("AstroPlant.api")
+from .schema import astroplant_capnp
+from .server_rpc import ServerRpc
+from .kit_rpc import KitRpc
+
+logger = logging.getLogger("astroplant_kit.api.client")
+
 
 class Client(object):
     """
     AstroPlant API Client class implementing methods to interact with the AstroPlant API.
     """
-
-    def __init__(self, host, port, keepalive=60, auth={}):
+    def __init__(self, event_loop, host, port, keepalive=60, auth={}):
         self.connected = False
+
+        self._event_loop = event_loop
+        self._kit_rpc_handler = None
+
+        self._server_rpc = ServerRpc(event_loop, self._server_rpc_request)
+        self._kit_rpc = KitRpc(event_loop, self._kit_rpc_response)
 
         self._mqtt_client = mqtt.Client()
         self._mqtt_client.on_connect = self._on_connect
         self._mqtt_client.on_disconnect = self._on_disconnect
         self._mqtt_client.on_message = self._on_message
-
         self._mqtt_client.reconnect_delay_set(min_delay=1, max_delay=128)
-
-        with open('./schema/aggregate-measurement.avsc', 'r') as f:
-            self._aggregate_schema = fastavro.parse_schema(json.load(f))
-
-        with open('./schema/raw-measurement.avsc', 'r') as f:
-            self._raw_schema = fastavro.parse_schema(json.load(f))
 
         if auth:
             self.serial = auth['serial']
@@ -39,11 +42,29 @@ class Client(object):
         logger.debug(f"Connecting to MQTT broker at {host}:{port}.")
         self._mqtt_client.connect_async(host=host, port=port, keepalive=keepalive)
 
+    def register_kit_rpc_handler(self, kit_rpc_handler):
+        self._kit_rpc._register_handler(kit_rpc_handler)
+
+    def _server_rpc_request(self, payload):
+        self._mqtt_client.publish(
+            topic = f'kit/{self.serial}/server-rpc/request',
+            payload = payload,
+            qos = 1 # Deliver at least once.
+        )
+
+    def _kit_rpc_response(self, payload):
+        self._mqtt_client.publish(
+            topic = f'kit/{self.serial}/kit-rpc/response',
+            payload = payload,
+            qos = 1 # Deliver at least once.
+        )
+
     def start(self):
         """
         Start the client background thread.
         """
         self._mqtt_client.loop_start()
+        self._mqtt_client.subscribe(f'kit/#')
 
     def stop(self):
         """
@@ -51,17 +72,55 @@ class Client(object):
         """
         self._mqtt_client.loop_stop()
 
+    def server_rpc(self):
+        """
+        Get a handle to the server RPC.
+        """
+        return self._server_rpc
+
     def _on_connect(self, client, user_data, flags, rc):
+        """
+        Handles (re)connections.
+        """
         logger.info("Connected.")
+        self._mqtt_client.subscribe(f'kit/{self.serial}/server-rpc/response', qos=1)
+        self._mqtt_client.subscribe(f'kit/{self.serial}/kit-rpc/request', qos=1)
         self.connected = True
 
     def _on_disconnect(self, client, user_data, rc):
+        """
+        Handles disconnections.
+        """
         logger.info("Disconnected.")
         self.connected = False
 
     def _on_message(self, client, user_data, msg):
+        """
+        Handles received messages.
+        """
         topic = msg.topic
         payload = msg.payload
+
+        topics = topic.split("/")
+
+        router = {
+            'server-rpc': {
+                'response': self._server_rpc._on_response,
+            },
+            'kit-rpc': {
+                'request': self._kit_rpc._on_request,
+            },
+        }
+
+        if len(topics) >= 2:
+            for path in topics[2:]:
+                if path in router:
+                    router = router[path]
+                    if callable(router):
+                        router(payload)
+                        break
+                else:
+                    logger.warn("unknown MQTT route:", topics)
 
     def publish_raw_measurement(self, measurement):
         """
@@ -69,6 +128,7 @@ class Client(object):
         """
         logger.debug(f"Sending raw measurement: {measurement.__dict__}")
         msg = BytesIO()
+        """
         fastavro.schemaless_writer(
             msg,
             self._raw_schema,
@@ -81,12 +141,22 @@ class Client(object):
                 'value': measurement.value
             }
         )
-
+        """
+        raw_measurement_msg = astroplant_capnp.RawMeasurement.new_message(
+                kitSerial = '', # Filled on the backend-side for security reasons
+                peripheral = 2, # measurement.peripheral.get_id(),
+                physicalQuantity = measurement.physical_quantity,
+                physicalUnit = measurement.physical_unit,
+                datetime = round(measurement.end_datetime.timestamp() * 1000),
+                value = measurement.value
+            )
+        """
         self._mqtt_client.publish(
             topic = f'kit/{self.serial}/measurement/raw',
-            payload = msg.getvalue(),
+            payload = raw_measurement_msg.to_bytes_packed(),
             qos = 0 # Deliver at most once.
         )
+        """
 
     def publish_aggregate_measurement(self, measurement):
         """
@@ -94,6 +164,7 @@ class Client(object):
         """
         logger.debug(f"Sending aggregate measurement: {measurement.__dict__}")
         msg = BytesIO()
+        """
         fastavro.schemaless_writer(
             msg,
             self._aggregate_schema,
@@ -114,3 +185,4 @@ class Client(object):
             payload = msg.getvalue(),
             qos = 2 # Deliver exactly once. Maybe downgrade to `1`: deliver at least once.
         )
+        """

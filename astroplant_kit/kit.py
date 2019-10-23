@@ -2,6 +2,12 @@
 Contains the main kit routines.
 """
 
+# Make sure astroplant_kit is in the path
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.dirname(__file__) + '/..'))
+
+import datetime
 import signal
 import functools
 import asyncio
@@ -12,12 +18,14 @@ import logging
 from astroplant_client import Client
 from astroplant_kit import peripheral
 
-logger = logging.getLogger("AstroPlant")
+logger = logging.getLogger("astroplant_kit.kit")
 
 class Kit(object):
-    def __init__(self, api_client: Client, debug_configuration):
+    def __init__(self, event_loop, api_client: Client, debug_configuration):
         self.halt = False
+        self.startup_time = datetime.datetime.now()
 
+        self._event_loop = event_loop
         self.peripheral_modules = {}
         self.peripheral_manager = peripheral.PeripheralManager()
         self.peripheral_manager.subscribe_predicate(lambda a: True, lambda m: self.publish_measurement(m))
@@ -161,12 +169,27 @@ class Kit(object):
         api_worker.start()
 
         # Run the async event loop
-        self.event_loop = asyncio.get_event_loop()
         try:
-            self.peripheral_manager.run()
-            self.event_loop.run_forever()
+            self._event_loop.create_task(self.async_bootstrap())
+            self._event_loop.run_forever()
         except KeyboardInterrupt:
             # Request halt
             self.halt = True
-
             print("HALT received...")
+
+    async def async_bootstrap(self):
+        await self.rpc_test()
+
+
+    async def rpc_test(self):
+        print("running 1")
+        r = await self.api_client.server_rpc().version()
+        print(f'response 1 =========: {r}')
+
+        print("running 2")
+        r = await self.api_client.server_rpc().version()
+        print(f'response 2 =========: {r}')
+
+        print("running 3")
+        r = await self.api_client.server_rpc().version()
+        print(f'response 3 =========: {r}')
