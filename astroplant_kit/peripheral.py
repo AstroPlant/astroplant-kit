@@ -63,18 +63,19 @@ class PeripheralManager(object):
             if predicate(measurement):
                 callback(measurement)
 
-    def create_peripheral(self, peripheral_class, peripheral_object_name, peripheral_parameters):
+    def create_peripheral(self, peripheral_class, id, name, configuration):
         """
         Create and add a peripheral by its class name.
 
         :param peripheral_class: The class of the peripheral to add.
-        :param peripheral_object_name: The name of the specific peripheral to add.
-        :param peripheral_parameters: The instantiation parameters of the peripheral.
+        :param id: The id of the specific peripheral to add.
+        :param name: The name of the peripheral.
+        :param configuration: The instantiation paramaters (configuration) of the peripheral.
         :return: The created peripheral.
         """
 
         # Instantiate peripheral
-        peripheral = peripheral_class(peripheral_object_name, self, **peripheral_parameters)
+        peripheral = peripheral_class(id, name, self, configuration=configuration)
 
         # Set message publication handle
         peripheral._set_publish_handle(self._publish_handle)
@@ -94,7 +95,8 @@ class Peripheral(object):
     #: Boolean indicating whether the peripheral can accept commands.
     COMMANDS = False
 
-    def __init__(self, name, peripheral_device_manager):
+    def __init__(self, id, name, peripheral_device_manager):
+        self.id = id
         self.name = name
         self.manager = peripheral_device_manager
         self.logger = logger.getChild("peripheral").getChild(self.name)
@@ -313,8 +315,8 @@ class Display(Peripheral):
     """
     RUNNABLE = True
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args):
+        super().__init__(*args)
         self.log_message_queue = []
         self.log_condition = asyncio.Condition()
         self.measurements = {}
@@ -395,6 +397,9 @@ class DebugDisplay(Display):
     """
     A trivial peripheral display device implementation printing messages to the terminal.
     """
+    def __init__(self, *args, configuration):
+        super().__init__(*args)
+
     def display(self, str):
         print("Debug Display: %s" % str)
 
@@ -425,9 +430,9 @@ class LocalDataLogger(Actuator):
     A virtual peripheral device writing observations to internal storage.
     """
 
-    def __init__(self, *args, storage_path, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.storage_path = storage_path
+    def __init__(self, *args, configuration):
+        super().__init__(*args)
+        self.storage_path = configuration['storagePath']
 
         # Subscribe to all aggregate measurements.
         self.manager.subscribe_predicate(

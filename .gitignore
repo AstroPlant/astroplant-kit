@@ -14,3 +14,4 @@ kit_config.toml
 
 # Ignore output
 data
+cache

@@ -1,29 +1,11 @@
 import logging
 import asyncio
 import datetime
+import json
 from .schema import astroplant_capnp
+from .errors import *
 
 logger = logging.getLogger("astroplant_kit.api.server_rpc")
-
-
-class ServerRpcRequestTimedOut(Exception):
-    pass
-
-
-class RpcErrorOther(Exception):
-    pass
-
-
-class RpcErrorUnknown(Exception):
-    pass
-
-
-class RpcErrorMethodNotFound(Exception):
-    pass
-
-
-class RpcErrorRateLimit(Exception):
-    pass
 
 
 class ServerRpc(object):
@@ -113,4 +95,23 @@ class ServerRpc(object):
         if response.which() == 'version':
             return response.version
         else:
-            return None
+            raise RpcInvalidResponse()
+
+    async def get_active_configuration(self):
+        """
+        Request the active configuration of this kit.
+        """
+        (request, fut) = self._next_base_request()
+        request.getActiveConfiguration = None
+        self._send_request(request)
+
+        response = await fut
+        print(response)
+        if response.which() == 'getActiveConfiguration':
+            maybe_configuration = response.getActiveConfiguration
+            if maybe_configuration.which() == 'configuration':
+                return json.loads(maybe_configuration.configuration)
+            else:
+                None
+        else:
+            raise RpcInvalidResponse()

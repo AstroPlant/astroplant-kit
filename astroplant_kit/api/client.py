@@ -32,12 +32,13 @@ class Client(object):
 
         if auth:
             self.serial = auth['serial']
-            self._mqtt_client.username_pw_set(username=auth['serial'], password=auth['secret'])
+            logger.warn("TODO FIX username")
+            self._mqtt_client.username_pw_set(
+                username="k_develop", #auth['serial'],
+                password=auth['secret'],
+            )
         else:
             self.serial = 'anon'
-
-        logger.warn("TODO FIX serial")
-        self.serial = "k_develop"
 
         logger.debug(f"Connecting to MQTT broker at {host}:{port}.")
         self._mqtt_client.connect_async(host=host, port=port, keepalive=keepalive)
@@ -72,6 +73,7 @@ class Client(object):
         """
         self._mqtt_client.loop_stop()
 
+    @property
     def server_rpc(self):
         """
         Get a handle to the server RPC.
@@ -150,13 +152,12 @@ class Client(object):
                 datetime = round(measurement.end_datetime.timestamp() * 1000),
                 value = measurement.value
             )
-        """
+
         self._mqtt_client.publish(
             topic = f'kit/{self.serial}/measurement/raw',
             payload = raw_measurement_msg.to_bytes_packed(),
             qos = 0 # Deliver at most once.
         )
-        """
 
     def publish_aggregate_measurement(self, measurement):
         """

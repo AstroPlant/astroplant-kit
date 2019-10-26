@@ -32,7 +32,8 @@ def version():
 
 @cli.command()
 @click.argument('config-file', type=click.File('r'), default="./kit_config.toml")
-def run(config_file):
+@click.option('--cache-dir', type=click.Path(exists=True, dir_okay=True, writable=True, readable=True, resolve_path=True), default="./cache")
+def run(config_file, cache_dir):
     """
     Run the AstroPlant kit.
 
@@ -41,6 +42,7 @@ def run(config_file):
     import asyncio
     import astroplant_kit.config
     from astroplant_kit.api import Client
+    from astroplant_kit.cache import Cache
     from astroplant_kit.kit import Kit
     from astroplant_kit.kit_rpc import KitRpc
 
@@ -57,8 +59,10 @@ def run(config_file):
 
     api_client = Client(event_loop, **conf["message_broker"])
 
+    cache = Cache(cache_dir)
+
     logger.info('Initialising kit.')
-    kit = Kit(event_loop, api_client, conf["debug"])
+    kit = Kit(event_loop, api_client, conf["debug"], cache)
 
     kit_rpc = KitRpc(event_loop, kit)
 
