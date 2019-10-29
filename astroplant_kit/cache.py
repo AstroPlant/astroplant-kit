@@ -11,7 +11,7 @@ class Cache(object):
         with open(self._dir / CONFIGURATION_CACHE, 'w') as f:
             json.dump(configuration, f)
 
-    def read_configuration(self, configuration):
+    def read_configuration(self):
         with open(self._dir / CONFIGURATION_CACHE, 'r') as f:
             return json.load(f)
 
