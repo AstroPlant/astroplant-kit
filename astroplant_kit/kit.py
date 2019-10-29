@@ -190,11 +190,11 @@ class Kit(object):
         try:
             configuration = await self._fetch_and_store_configuration()
         except RpcError as e:
-            logger.warn("Could not get configuration from server, trying cache")
+            logger.warn(f'Could not get configuration from server, trying cache. Original error: {e}')
             try:
                 configuration = self.cache.read_configuration()
-            except:
-                logger.warn("Could not get configuration from cache, stopping" % e)
+            except Exception as e:
+                logger.warn(f'Could not get configuration from cache, stoping. Original error: {e}')
                 return
 
         self._configure(configuration)
