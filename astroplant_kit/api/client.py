@@ -129,27 +129,13 @@ class Client(object):
         Publish a (real-time) raw measurement.
         """
         logger.debug(f"Sending raw measurement: {measurement.__dict__}")
-        msg = BytesIO()
-        """
-        fastavro.schemaless_writer(
-            msg,
-            self._raw_schema,
-            {
-                'kit_serial': '', # Filled on the backend-side for security reasons.
-                'peripheral': measurement.peripheral.get_name(),
-                'physical_quantity': measurement.physical_quantity,
-                'physical_unit': measurement.physical_unit,
-                'datetime': round(measurement.end_datetime.timestamp() * 1000),
-                'value': measurement.value
-            }
-        )
-        """
+
         raw_measurement_msg = astroplant_capnp.RawMeasurement.new_message(
                 kitSerial = '', # Filled on the backend-side for security reasons
-                peripheral = 2, # measurement.peripheral.get_id(),
+                datetime = round(measurement.end_datetime.timestamp() * 1000),
+                peripheral = measurement.peripheral.get_id(),
                 physicalQuantity = measurement.physical_quantity,
                 physicalUnit = measurement.physical_unit,
-                datetime = round(measurement.end_datetime.timestamp() * 1000),
                 value = measurement.value
             )
 
@@ -165,25 +151,20 @@ class Client(object):
         """
         logger.debug(f"Sending aggregate measurement: {measurement.__dict__}")
         msg = BytesIO()
-        """
-        fastavro.schemaless_writer(
-            msg,
-            self._aggregate_schema,
-            {
-                'kit_serial': '', # Filled on the backend-side for security reasons.
-                'peripheral': measurement.peripheral.get_name(),
-                'physical_quantity': measurement.physical_quantity,
-                'physical_unit': measurement.physical_unit,
-                'start_datetime': round(measurement.start_datetime.timestamp() * 1000),
-                'end_datetime': round(measurement.end_datetime.timestamp() * 1000),
-                'type': measurement.aggregate_type,
-                'value': measurement.value
-            }
-        )
+
+        aggregate_measurement_msg = astroplant_capnp.AggregateMeasurement.new_message(
+                kitSerial = '', # Filled on the backend-side for security reasons
+                datetimeStart = round(measurement.start_datetime.timestamp() * 1000),
+                datetimeEnd = round(measurement.end_datetime.timestamp() * 1000),
+                peripheral = measurement.peripheral.get_id(),
+                physicalQuantity = measurement.physical_quantity,
+                physicalUnit = measurement.physical_unit,
+                aggregateType = measurement.aggregate_type,
+                value = measurement.value
+            )
 
         self._mqtt_client.publish(
             topic = f'kit/{self.serial}/measurement/aggregate',
             payload = msg.getvalue(),
             qos = 2 # Deliver exactly once. Maybe downgrade to `1`: deliver at least once.
         )
-        """

@@ -9,6 +9,17 @@ struct RawMeasurement {
   value @5 :Float64;
 }
 
+struct AggregateMeasurement {
+  kitSerial @0 :Text;
+  datetimeStart @1 :UInt64;
+  datetimeEnd @2 :UInt64;
+  peripheral @3 :Int32;
+  physicalQuantity @4 :Text;
+  physicalUnit @5 :Text;
+  aggregateType @6 :Text;
+  value @7 :Float64;
+}
+
 struct RpcError {
   union {
     other @0 :Void;
