@@ -134,8 +134,7 @@ class Client(object):
                 kitSerial = '', # Filled on the backend-side for security reasons
                 datetime = round(measurement.end_datetime.timestamp() * 1000),
                 peripheral = measurement.peripheral.get_id(),
-                physicalQuantity = measurement.physical_quantity,
-                physicalUnit = measurement.physical_unit,
+                quantityType = measurement.quantity_type.id,
                 value = measurement.value
             )
 
@@ -157,8 +156,7 @@ class Client(object):
                 datetimeStart = round(measurement.start_datetime.timestamp() * 1000),
                 datetimeEnd = round(measurement.end_datetime.timestamp() * 1000),
                 peripheral = measurement.peripheral.get_id(),
-                physicalQuantity = measurement.physical_quantity,
-                physicalUnit = measurement.physical_unit,
+                quantityType = measurement.quantity_type.id,
                 aggregateType = measurement.aggregate_type,
                 value = measurement.value
             )

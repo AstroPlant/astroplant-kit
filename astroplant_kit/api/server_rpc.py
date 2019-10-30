@@ -112,6 +112,21 @@ class ServerRpc(object):
             if maybe_configuration.which() == 'configuration':
                 return json.loads(maybe_configuration.configuration)
             else:
-                None
+                return None
+        else:
+            raise RpcInvalidResponse()
+
+    async def get_quantity_types(self):
+        """
+        Request the quantity types known to the RPC server.
+        """
+        (request, fut) = self._next_base_request()
+        request.getQuantityTypes = None
+        self._send_request(request)
+
+        response = await fut
+        print(response)
+        if response.which() == 'getQuantityTypes':
+            return json.loads(response.getQuantityTypes)
         else:
             raise RpcInvalidResponse()

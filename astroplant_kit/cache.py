@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 
 CONFIGURATION_CACHE = Path("configuration.json")
+QUANTITY_TYPES_CACHE = Path("quantity-types.json")
 
 class Cache(object):
     def __init__(self, cache_dir):
@@ -15,3 +16,10 @@ class Cache(object):
         with open(self._dir / CONFIGURATION_CACHE, 'r') as f:
             return json.load(f)
 
+    def write_quantity_types(self, quantity_types):
+        with open(self._dir / QUANTITY_TYPES_CACHE, 'w') as f:
+            json.dump(quantity_types, f)
+
+    def read_quantity_types(self):
+        with open(self._dir / QUANTITY_TYPES_CACHE, 'r') as f:
+            return json.load(f)

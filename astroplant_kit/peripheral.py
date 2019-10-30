@@ -21,6 +21,76 @@ class PeripheralManager(object):
         self.peripherals = []
         self.subscribers = []
         self.event_loop = None
+        self.quantity_types = []
+
+    def set_quantity_types(self, quantity_types):
+        """
+        Set the quantity types known to the server.
+        """
+        self.quantity_types = list(
+            map(
+                lambda qt: QuantityType(
+                    qt['id'],
+                    qt['physicalQuantity'],
+                    qt['physicalUnit'],
+                    physical_unit_symbol = qt['physicalUnitSymbol'] or None,
+                ),
+                quantity_types,
+            )
+        )
+
+    def _get_quantity_type(self, physical_quantity, physical_unit):
+        for qt in self.quantity_types:
+            if (
+                    qt.physical_quantity == physical_quantity
+                    and qt.physical_unit == physical_unit):
+                return qt
+        return None
+
+    def create_raw_measurement(
+        self,
+        peripheral,
+        physical_quantity,
+        physical_unit,
+        value,
+        start_datetime = None,
+        end_datetime = None,
+    ):
+        quantity_type = self._get_quantity_type(physical_quantity, physical_unit)
+        if quantity_type == None:
+            return None
+
+        return Measurement(
+            peripheral,
+            quantity_type,
+            value,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime or datetime.datetime.utcnow(),
+            aggregate_type=None,
+        )
+
+    def create_aggregate_measurement(
+        self,
+        peripheral,
+        physical_quantity,
+        physical_unit,
+        value,
+        aggregate_type,
+        start_datetime = None,
+        end_datetime = None,
+    ):
+        quantity_type = self._get_quantity_type(physical_quantity, physical_unit)
+        if quantity_type == None:
+            return None
+
+        return Measurement(
+            peripheral,
+            quantity_type,
+            value,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime or datetime.datetime.utcnow(),
+            aggregate_type=aggregate_type,
+        )
 
     def runnable_peripherals(self):
         """
@@ -165,6 +235,42 @@ class Sensor(Peripheral):
             }
         ]
 
+    def create_raw_measurement(
+            self,
+            physical_quantity,
+            physical_unit,
+            value,
+            start_datetime = None,
+            end_datetime = None,
+    ):
+        return self.manager.create_raw_measurement(
+            self,
+            physical_quantity,
+            physical_unit,
+            value,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+        )
+
+    def create_aggregate_measurement(
+            self,
+            physical_quantity,
+            physical_unit,
+            value,
+            aggregate_type,
+            start_datetime = None,
+            end_datetime = None,
+    ):
+        return self.manager.create_aggregate_measurement(
+            self,
+            physical_quantity,
+            physical_unit,
+            value,
+            aggregate_type,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+        )
+
     async def run(self):
         await asyncio.wait([self._make_measurements(), self._reduce_measurements()])
 
@@ -248,14 +354,14 @@ class Sensor(Peripheral):
         values = list(map(lambda m: m.value, measurements))
 
         return [
-            Measurement(
+            self.manager.create_aggregate_measurement(
                 measurements[0].peripheral,
                 measurements[0].physical_quantity,
                 measurements[0].physical_unit,
                 reducer['fn'](values),
+                reducer['name'],
                 start_datetime=start_datetime,
                 end_datetime=end_datetime,
-                aggregate_type=reducer['name']
             )
             for reducer in self.reducers
         ]
@@ -266,6 +372,28 @@ class Actuator(Peripheral):
     """
 
     RUNNABLE = False
+
+
+class QuantityType(object):
+    """
+    Quantity type class.
+
+    The quantity type id is given by the server.
+    """
+
+    def __init__(self, id, physical_quantity, physical_unit, physical_unit_symbol=None):
+        self.id = id
+        self.physical_quantity = physical_quantity
+        self.physical_unit = physical_unit
+        self.physical_unit_symbol = physical_unit_symbol
+
+    @property
+    def physical_unit_short(self):
+        if self.physical_unit_symbol:
+            return self.physical_unit_symbol
+        else:
+            return self.physical_unit
+
 
 class Measurement(object):
     """
@@ -278,36 +406,21 @@ class Measurement(object):
     def __init__(
             self,
             peripheral,
-            physical_quantity,
-            physical_unit,
+            quantity_type,
             value,
             start_datetime = None,
             end_datetime = None,
             aggregate_type = None
     ):
         self.peripheral = peripheral
-        self.physical_quantity = physical_quantity
-        self.physical_unit = physical_unit
+        self.quantity_type = quantity_type
         self.value = value
         self.start_datetime = start_datetime
-        self.end_datetime = end_datetime or datetime.datetime.utcnow()
+        self.end_datetime = end_datetime
         self.aggregate_type = aggregate_type
 
-    def get_physical_unit_short(self):
-        # Todo:
-        # It's probably better to have a predefined registry of
-        # physical quantity / unit combinations, that define
-        # short names for units as well. This promotes consistency
-        # across peripheral implementations as well.
-        if (self.physical_unit == "Degrees Celsius"):
-            return "Degrees C"
-        elif (self.physical_unit == "Parts per million"):
-            return "PPM"
-        else:
-            return self.physical_unit
-
     def __str__(self):
-        return "%s-%s - %s %s %s: %s %s" % (self.start_datetime, self.end_datetime, self.aggregate_type, self.peripheral, self.physical_quantity, self.value, self.physical_unit)
+        return "%s-%s - %s %s %s: %s %s" % (self.start_datetime, self.end_datetime, self.aggregate_type, self.peripheral, self.quantity_type.physical_quantity, self.value, self.quantity_type.physical_unit)
 
 class Display(Peripheral):
     """
@@ -341,9 +454,9 @@ class Display(Peripheral):
 
                 self.display("{quantity} ({peripheral})\n{value:.5g} {unit}".format(
                     peripheral = measurement.peripheral,
-                    quantity = measurement.physical_quantity,
+                    quantity = measurement.quantity_type.physical_quantity,
                     value = measurement.value,
-                    unit = measurement.get_physical_unit_short()
+                    unit = measurement.quantity_type.physical_unit_short,
                 ))
 
                 idx = (idx + 1) % len(self.measurements)
@@ -394,7 +507,7 @@ class Display(Peripheral):
         """
         :param m: The measurement to handle.
         """
-        self.measurements[(m.peripheral, m.physical_quantity)] = m
+        self.measurements[(m.peripheral, m.quantity_type.physical_quantity)] = m
 
 class DebugDisplay(Display):
     """

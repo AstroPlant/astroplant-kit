@@ -4,9 +4,8 @@ struct RawMeasurement {
   kitSerial @0 :Text;
   datetime @1 :UInt64;
   peripheral @2 :Int32;
-  physicalQuantity @3 :Text;
-  physicalUnit @4 :Text;
-  value @5 :Float64;
+  quantityType @3 :Int32;
+  value @4 :Float64;
 }
 
 struct AggregateMeasurement {
@@ -14,10 +13,9 @@ struct AggregateMeasurement {
   datetimeStart @1 :UInt64;
   datetimeEnd @2 :UInt64;
   peripheral @3 :Int32;
-  physicalQuantity @4 :Text;
-  physicalUnit @5 :Text;
-  aggregateType @6 :Text;
-  value @7 :Float64;
+  quantityType @4 :Int32;
+  aggregateType @5 :Text;
+  value @6 :Float64;
 }
 
 struct RpcError {
@@ -34,6 +32,7 @@ struct ServerRpcRequest {
   union {
     version @1 :Void;
     getActiveConfiguration @2 :Void;
+    getQuantityTypes @3 :Void;
   }
 }
 
@@ -44,6 +43,7 @@ struct ServerRpcResponse {
     error @1 :RpcError;
     version @2 :Text;
     getActiveConfiguration @3 :ActiveConfiguration;
+    getQuantityTypes @4 :Text;
   }
 }
 

@@ -182,9 +182,14 @@ class Kit(object):
     async def _fetch_and_store_configuration(self):
         logger.debug("Fetching kit configuration.")
         configuration = await self.api_client.server_rpc.get_active_configuration()
-        print(configuration)
         self.cache.write_configuration(configuration)
         return configuration
+
+    async def _fetch_and_store_quantity_types(self):
+        logger.debug("Fetching quantity types.")
+        quantity_types = await self.api_client.server_rpc.get_quantity_types()
+        self.cache.write_quantity_types(quantity_types)
+        return quantity_types
 
     async def async_bootstrap(self):
         try:
@@ -197,5 +202,16 @@ class Kit(object):
                 logger.warn(f'Could not get configuration from cache, stoping. Original error: {e}')
                 return
 
+        try:
+            quantity_types = await self._fetch_and_store_quantity_types()
+        except RpcError as e:
+            logger.warn(f'Could not get quantity types from server, trying cache. Original error: {e}')
+            try:
+                quantity_types = self.cache.read_quantity_types()
+            except Exception as e:
+                logger.warn(f'Could not get quantity types from cache, stoping. Original error: {e}')
+                return
+
+        self.peripheral_manager.set_quantity_types(quantity_types)
         self._configure(configuration)
         self.peripheral_manager.run()
