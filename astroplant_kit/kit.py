@@ -11,7 +11,7 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 import datetime
 import signal
 import functools
-import asyncio
+import trio
 import threading
 import time
 import importlib
@@ -23,14 +23,12 @@ from .cache import Cache
 logger = logging.getLogger("astroplant_kit.kit")
 
 class Kit(object):
-    def __init__(self, event_loop, api_client: Client, debug_configuration, cache: Cache):
+    def __init__(self, api_client: Client, debug_configuration, cache: Cache):
         self.halt = False
         self.startup_time = datetime.datetime.now()
 
-        self._event_loop = event_loop
         self.peripheral_modules = {}
         self.peripheral_manager = peripheral.PeripheralManager()
-        self.peripheral_manager.subscribe_predicate(lambda a: True, lambda m: self.publish_measurement(m))
         self.api_client = api_client
         self.cache = cache
 
@@ -117,63 +115,23 @@ class Kit(object):
 
     def publish_measurement(self, measurement):
         """
-        Enqueue a measurement for publishing to the back-end.
+        Publish a measurement to the back-end.
 
         :param measurement: The measurement to publish.
         """
-        MAX_PENDING_MEASUREMENTS = 200
+        if measurement.aggregate_type is None:
+            self.api_client.publish_raw_measurement(measurement)
+        else:
+            self.api_client.publish_aggregate_measurement(measurement)
 
-        with self.messages_condition:
-            self.messages.append(measurement)
-
-            if len(self.messages) > MAX_PENDING_MEASUREMENTS: # Only allow buffer to grow up to a cap.
-                self.messages = self.messages[-MAX_PENDING_MEASUREMENTS:]
-            self.messages_condition.notify()
-
-    def _api_worker(self):
-        """
-        Runs the API message worker; publishes measurements to the API.
-        """
-        while True:
-            with self.messages_condition:
-                if len(self.messages) == 0:
-                    # Wait until there is at least one measurement available
-                    self.messages_condition.wait()
-
-                measurement = self.messages.pop(0)
-
-            logger.debug('Publishing measurement: %s' % measurement)
-            # TODO: perhaps messsages should not be retried, and instead the API client
-            # stores failed messages in the filesystem locally for intermittent retry.
-            try:
-                if measurement.aggregate_type is None:
-                    self.api_client.publish_raw_measurement(measurement)
-                else:
-                    self.api_client.publish_aggregate_measurement(measurement)
-            except Exception as e:
-                with self.messages_condition:
-                    # Re-insert failed measurement.
-                    self.messages.insert(0, measurement)
-
-                time.sleep(15)
-                logger.warning(f"Failed to publish measurement. Will retry. Original exception: {e}")
-
-    def run(self):
+    async def run(self):
         """
         Run the kit.
         """
-
         logger.info('Starting.')
 
-        # Run the API worker in a separate thread
-        api_worker = threading.Thread(target=self._api_worker)
-        api_worker.daemon = True
-        api_worker.start()
-
-        # Run the async event loop
         try:
-            self._event_loop.create_task(self.async_bootstrap())
-            self._event_loop.run_forever()
+            await self.bootstrap()
         except KeyboardInterrupt:
             # Request halt
             self.halt = True
@@ -191,7 +149,7 @@ class Kit(object):
         self.cache.write_quantity_types(quantity_types)
         return quantity_types
 
-    async def async_bootstrap(self):
+    async def bootstrap(self):
         try:
             configuration = await self._fetch_and_store_configuration()
         except RpcError as e:
@@ -214,4 +172,9 @@ class Kit(object):
 
         self.peripheral_manager.set_quantity_types(quantity_types)
         self._configure(configuration)
-        self.peripheral_manager.run()
+        async with trio.open_nursery() as nursery:
+            measurements_rx = self.peripheral_manager.measurements_receiver()
+
+            nursery.start_soon(self.peripheral_manager.run)
+            async for measurement in measurements_rx:
+                self.publish_measurement(measurement)

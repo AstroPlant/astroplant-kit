@@ -24,8 +24,7 @@ class KitRpc(object):
     """
     Handles MQTT messages to implement the kit RPC system.
     """
-    def __init__(self, event_loop, kit_rpc_response_handle):
-        self._event_loop = event_loop
+    def __init__(self, kit_rpc_response_handle):
         self._kit_rpc_response_handle = kit_rpc_response_handle
         self._handler = None
 
@@ -55,7 +54,7 @@ class KitRpc(object):
 
         self._send_response(response)
 
-    def _on_request(self, data):
+    async def _on_request(self, data):
         if not self._handler:
             logger.warn("Received RPC request, but kit RPC handler is not registered.")
             return
@@ -66,4 +65,4 @@ class KitRpc(object):
             logger.warn("received malformed RPC request")
             return
 
-        self._event_loop.call_soon_threadsafe(lambda: self._event_loop.create_task(self._handle_request(request)))
+        await self._handle_request(request)

@@ -1,26 +1,64 @@
 class RpcError(Exception):
-    pass
+    """
+    RPC base error.
+    """
+
+    def __init__(self, message=None):
+        if message is not None:
+            super().__init__(f"rpc error: {message}")
+        else:
+            super().__init__("rpc error")
 
 
 class ServerRpcRequestTimedOut(RpcError):
-    pass
+    """
+    The RPC server did not respond in time.
+    """
+
+    def __init__(self):
+        super().__init__("server request timed out")
 
 
 class RpcErrorOther(RpcError):
-    pass
+    """
+    An other RPC error occurred.
+    """
+
+    def __init__(self):
+        super().__init__("other")
 
 
 class RpcErrorUnknown(RpcError):
-    pass
+    """
+    An unknown RPC error occurred.
+    """
+
+    def __init__(self):
+        super().__init__("unknown")
 
 
 class RpcErrorMethodNotFound(RpcError):
-    pass
+    """
+    The RPC method was not found.
+    """
+
+    def __init__(self):
+        super().__init__("method not found")
 
 
 class RpcErrorRateLimit(RpcError):
-    pass
+    """
+    The RPC request was rate limited.
+    """
+
+    def __init__(self):
+        super().__init__("rate limited")
 
 
 class RpcInvalidResponse(RpcError):
-    pass
+    """
+    The RPC response was invalid.
+    """
+
+    def __init__(self):
+        super().__init__("invalid response")

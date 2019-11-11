@@ -1,4 +1,4 @@
-import asyncio
+import trio
 import paho.mqtt.client as mqtt
 import json
 from io import BytesIO
@@ -15,14 +15,18 @@ class Client(object):
     """
     AstroPlant API Client class implementing methods to interact with the AstroPlant API.
     """
-    def __init__(self, event_loop, host, port, keepalive=60, auth={}):
+    def __init__(self, host, port, keepalive=60, auth={}):
         self.connected = False
 
-        self._event_loop = event_loop
+        message_sender, message_receiver = trio.open_memory_channel(0)
+        self._message_sender = message_sender
+        self._message_receiver = message_receiver
+        self._trio_token = None
+
         self._kit_rpc_handler = None
 
-        self._server_rpc = ServerRpc(event_loop, self._server_rpc_request)
-        self._kit_rpc = KitRpc(event_loop, self._kit_rpc_response)
+        self._server_rpc = ServerRpc(self._server_rpc_request)
+        self._kit_rpc = KitRpc(self._kit_rpc_response)
 
         self._mqtt_client = mqtt.Client()
         self._mqtt_client.on_connect = self._on_connect
@@ -60,18 +64,27 @@ class Client(object):
             qos = 1 # Deliver at least once.
         )
 
-    def start(self):
+    async def run(self):
         """
-        Start the client background thread.
+        Run the API client. Should only be called once.
         """
-        self._mqtt_client.loop_start()
-        self._mqtt_client.subscribe(f'kit/#')
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(self._server_rpc.run)
+            self._trio_token = trio.hazmat.current_trio_token()
 
-    def stop(self):
-        """
-        Stop the client background thread.
-        """
-        self._mqtt_client.loop_stop()
+            try:
+                logger.debug("Starting API client.")
+
+                # Start the client background thread.
+                self._mqtt_client.loop_start()
+
+                async for msg in self._message_receiver:
+                    await self._handle_message(msg)
+            finally:
+                logger.debug("Stopping API client.")
+
+                # Stop the client background thread.
+                self._mqtt_client.loop_stop()
 
     @property
     def server_rpc(self):
@@ -100,8 +113,20 @@ class Client(object):
         """
         Handles received messages.
         """
-        topic = msg.topic
-        payload = msg.payload
+        logger.debug(f"MQTT received message: {msg}")
+        resp = trio.from_thread.run(
+            self._message_sender.send,
+            msg,
+            trio_token=self._trio_token,
+        )
+
+    async def _handle_message(self, message):
+        """
+        Handles received messages.
+        """
+        logger.debug(f"Handling message: {message}")
+        topic = message.topic
+        payload = message.payload
 
         topics = topic.split("/")
 
@@ -119,7 +144,7 @@ class Client(object):
                 if path in router:
                     router = router[path]
                     if callable(router):
-                        router(payload)
+                        await router(payload)
                         break
                 else:
                     logger.warn("unknown MQTT route:", topics)
@@ -128,7 +153,7 @@ class Client(object):
         """
         Publish a (real-time) raw measurement.
         """
-        logger.debug(f"Sending raw measurement: {measurement.__dict__}")
+        logger.debug(f"Sending raw measurement: {measurement.peripheral.name}: {measurement.quantity_type.physical_quantity} {measurement.value} {measurement.quantity_type.physical_unit_short}")
 
         raw_measurement_msg = astroplant_capnp.RawMeasurement.new_message(
                 kitSerial = '', # Filled on the backend-side for security reasons
@@ -148,7 +173,7 @@ class Client(object):
         """
         Publish an aggregate measurement.
         """
-        logger.debug(f"Sending aggregate measurement: {measurement.__dict__}")
+        logger.debug(f"Sending aggregate measurement: {measurement.peripheral.name}: {measurement.aggregate_type} {measurement.quantity_type.physical_quantity} {measurement.value} {measurement.quantity_type.physical_unit_short}")
         msg = BytesIO()
 
         aggregate_measurement_msg = astroplant_capnp.AggregateMeasurement.new_message(

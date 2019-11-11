@@ -2,7 +2,7 @@ import abc
 import sys
 import collections
 import datetime
-import asyncio
+import trio
 import concurrent.futures
 import logging
 import collections
@@ -19,9 +19,13 @@ class PeripheralManager(object):
 
     def __init__(self):
         self.peripherals = []
-        self.subscribers = []
+        self.measurement_txs = []
         self.event_loop = None
         self.quantity_types = []
+
+        (measurement_tx, measurement_rx) = trio.open_memory_channel(64)
+        self._measurement_tx = measurement_tx
+        self._measurement_rx = measurement_rx
 
     def set_quantity_types(self, quantity_types):
         """
@@ -38,6 +42,18 @@ class PeripheralManager(object):
                 quantity_types,
             )
         )
+
+    def measurements_receiver(self, buffer=10) -> trio.MemoryReceiveChannel:
+        """
+        Create and get a measurement receiver channel.
+
+        If the receiver does not keep up with the messages, the channel will
+        be dropped.
+        """
+        tx, rx = trio.open_memory_channel(buffer)
+        self.measurement_txs.append(tx)
+
+        return rx
 
     def _get_quantity_type(self, physical_quantity, physical_unit):
         for qt in self.quantity_types:
@@ -98,40 +114,33 @@ class PeripheralManager(object):
         """
         return filter(lambda peripheral: peripheral.RUNNABLE, self.peripherals)
 
-    def run(self):
+    async def run(self):
         """
-        Run all runnable peripherals.
+        Run all runnable peripherals and broadcast measurements.
         """
-        for peripheral in self.runnable_peripherals():
-            asyncio.ensure_future(peripheral.run())
+        async with trio.open_nursery() as nursery:
+            for peripheral in self.runnable_peripherals():
+                nursery.start_soon(peripheral.run)
 
-    def subscribe_physical_quantity(self, physical_quantity, callback):
-        """
-        Subscribe to messages concerning a specific physical quantity.
+            async for measurement in self._measurement_rx:
+                await self._broadcast(measurement)
 
-        :param physical_quantity: The name of the physical quantity for which the measurements are being subscribed to.
-        :param callback: The callback to call with the measurement.
-        """
-        self.subscribe_predicate(lambda measurement: measurement.physical_quantity == physical_quantity, callback)
-
-    def subscribe_predicate(self, predicate, callback):
-        """
-        Subscribe to messages that conform to a predicate.
-
-        :param predicate: A function taking as input a measurement and returning true or false.
-        :param callback: The callback to call with the measurement.
-        """
-        self.subscribers.append((predicate, callback))
-
-    def _publish_handle(self, measurement):
+    async def _publish_handle(self, measurement):
         """
         Publish a measurement.
 
         :param measurement: The measurement to publish.
         """
-        for (predicate, callback) in self.subscribers:
-            if predicate(measurement):
-                callback(measurement)
+        await self._measurement_tx.send(measurement)
+
+    async def _broadcast(self, measurement):
+        for i in reversed(range(len(self.measurement_txs))):
+            tx = self.measurement_txs[i]
+            try:
+                tx.send_nowait(measurement)
+            except (trio.WouldBlock, trio.EndOfChannel):
+                await tx.aclose()
+                del self.measurement_txs[i]
 
     def create_peripheral(self, peripheral_class, id, name, configuration):
         """
@@ -272,7 +281,9 @@ class Sensor(Peripheral):
         )
 
     async def run(self):
-        await asyncio.wait([self._make_measurements(), self._reduce_measurements()])
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(self._make_measurements)
+            nursery.start_soon(self._reduce_measurements)
 
     async def _make_measurements(self):
         """
@@ -286,14 +297,14 @@ class Sensor(Peripheral):
 
                 # Publish each measurement
                 for m in measurement:
-                    asyncio.ensure_future(self._publish_measurement(m))
+                    await self._publish_measurement(m)
             else:
                 # Add measurement to the sensor's measurement list (for later reduction)
                 self.measurements.append(measurement)
 
                 # Publish the measurement
-                asyncio.ensure_future(self._publish_measurement(measurement))
-            await asyncio.sleep(self.TIME_SLEEP_BETWEEN_MEASUREMENTS)
+                await self._publish_measurement(measurement)
+            await trio.sleep(self.TIME_SLEEP_BETWEEN_MEASUREMENTS)
 
     async def _reduce_measurements(self):
         """
@@ -302,7 +313,7 @@ class Sensor(Peripheral):
         while True:
             start_datetime = datetime.datetime.utcnow()
 
-            await asyncio.sleep(self.TIME_REDUCE_MEASUREMENTS)
+            await trio.sleep(self.TIME_REDUCE_MEASUREMENTS)
 
             self.logger.debug("Reducing measurements. %s" % len(self.measurements))
 
@@ -330,14 +341,14 @@ class Sensor(Peripheral):
 
             # Publish reduced measurements
             for reduced_measurement in reduced_measurements:
-                asyncio.ensure_future(self._publish_measurement(reduced_measurement))
+                await self._publish_measurement(reduced_measurement)
 
     @abc.abstractmethod
     async def measure(self):
         raise NotImplementedError()
 
     async def _publish_measurement(self, measurement):
-        self._publish_handle(measurement)
+        await self._publish_handle(measurement)
 
     def reduce(self, measurements, start_datetime, end_datetime):
         """
@@ -433,52 +444,56 @@ class Display(Peripheral):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.log_message_queue = []
-        self.log_condition = asyncio.Condition()
-        self.measurements = {}
+        self._log_message_queue = []
+        self._measurements = {}
+        self._trio_token = None
+        self._condition = trio.Condition()
 
-        # Subscribe to all measurements.
-        self.manager.subscribe_predicate(lambda a: True, lambda m: self.handle_measurement(m))
+    async def _update_measurements(self):
+        """
+        Listen to new measurements and handle them.
+        """
+        async for m in self.manager.measurements_receiver():
+            self._measurements[(m.peripheral, m.quantity_type.physical_quantity)] = m
 
     async def run(self):
         idx = 0
 
-        while True:
-            if len(self.log_message_queue) > 0:
-                # Display log.
-                msg = self.log_message_queue.pop(0)
-                self.display(msg)
-            elif len(self.measurements) > 0:
-                # No logs; display a measurement.
-                measurement = list(self.measurements.values())[idx]
+        self._trio_token = trio.hazmat.current_trio_token()
 
-                self.display("{quantity} ({peripheral})\n{value:.5g} {unit}".format(
-                    peripheral = measurement.peripheral,
-                    quantity = measurement.quantity_type.physical_quantity,
-                    value = measurement.value,
-                    unit = measurement.quantity_type.physical_unit_short,
-                ))
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(self._update_measurements)
 
-                idx = (idx + 1) % len(self.measurements)
+            while True:
+                if len(self._log_message_queue) > 0:
+                    # Display log.
+                    msg = self._log_message_queue.pop(0)
+                    self.display(msg)
+                elif len(self._measurements) > 0:
+                    # No logs; display a measurement.
+                    measurement = list(self._measurements.values())[idx]
 
-            if len(self.log_message_queue) == 0:
-                # No remaining logs. Wait for a log notification,
-                # or for 15 seconds, whichever comes first.
-                await self.log_condition.acquire()
+                    self.display("{quantity} ({peripheral})\n{value:.5g} {unit}".format(
+                        peripheral = measurement.peripheral,
+                        quantity = measurement.quantity_type.physical_quantity,
+                        value = measurement.value,
+                        unit = measurement.quantity_type.physical_unit_short,
+                    ))
 
-                try:
-                    log_task = asyncio.ensure_future(self.log_condition.wait())
-                    await asyncio.wait_for(log_task, timeout=15.0)
-                except asyncio.TimeoutError:
-                    pass
-                finally:
-                    # Check whether we have acquired the condition lock (in case of timeout, we don't have the lock)
-                    if self.log_condition.locked():
-                        self.log_condition.release()
+                    idx = (idx + 1) % len(self._measurements)
 
-    async def _log_notify(self):
-        async with self.log_condition:
-            self.log_condition.notify()
+                if len(self._log_message_queue) > 0:
+                    await trio.sleep(5)
+                else:
+                    # No remaining logs. Wait for a log notification,
+                    # or for 15 seconds, whichever comes first.
+                    with trio.move_on_after(15):
+                        async with self._condition:
+                            await self._condition.wait()
+
+    async def _condition_notify(self):
+        async with self._condition:
+            self._condition.notify()
 
     def add_log_message(self, msg):
         """
@@ -486,13 +501,9 @@ class Display(Peripheral):
 
         :param msg: The message to be displayed.
         """
-        self.log_message_queue.append(msg)
-
-        def notify():
-            self.manager.event_loop.create_task(self._log_notify())
-
-        if self.manager.event_loop is not None:
-            self.manager.event_loop.call_soon_threadsafe(notify)
+        self._log_message_queue.append(msg)
+        if self._trio_token is not None:
+            trio.from_thread.run_sync(self._condition_notify, trio_token=self._trio_token)
 
     @abc.abstractmethod
     def display(self, str):
@@ -502,12 +513,6 @@ class Display(Peripheral):
         :param str: The string to display.
         """
         raise NotImplementedError()
-
-    def handle_measurement(self, m):
-        """
-        :param m: The measurement to handle.
-        """
-        self.measurements[(m.peripheral, m.quantity_type.physical_quantity)] = m
 
 class DebugDisplay(Display):
     """

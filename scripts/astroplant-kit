@@ -39,7 +39,8 @@ def run(config_file, cache_dir):
 
     CONFIG_FILE is the configuration file to be used, defaulting to `./kit_config.toml`.
     """
-    import asyncio
+    import trio
+
     import astroplant_kit.config
     from astroplant_kit.api import Client
     from astroplant_kit.cache import Cache
@@ -55,21 +56,23 @@ def run(config_file, cache_dir):
 
     logger.info('Creating AstroPlant network client.')
 
-    event_loop = asyncio.get_event_loop()
-
-    api_client = Client(event_loop, **conf["message_broker"])
+    api_client = Client(**conf["message_broker"])
 
     cache = Cache(cache_dir)
 
     logger.info('Initialising kit.')
-    kit = Kit(event_loop, api_client, conf["debug"], cache)
+    kit = Kit(api_client, conf["debug"], cache)
 
-    kit_rpc = KitRpc(event_loop, kit)
+    kit_rpc = KitRpc(kit)
 
     api_client.register_kit_rpc_handler(kit_rpc)
 
-    api_client.start()
-    kit.run()
+    async def run():
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(api_client.run)
+            nursery.start_soon(kit.run)
+
+    trio.run(run)
 
 
 cli()
