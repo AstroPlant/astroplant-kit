@@ -1,6 +1,7 @@
 import trio
 import paho.mqtt.client as mqtt
 import json
+import time
 from io import BytesIO
 import logging
 
@@ -9,6 +10,10 @@ from .server_rpc import ServerRpc
 from .kit_rpc import KitRpc
 
 logger = logging.getLogger("astroplant_kit.api.client")
+
+
+INITIAL_CONNECTION_WARNING_SECONDS = 10
+BETWEEN_CONNECTION_WARNING_SECONDS = 180
 
 
 class Client(object):
@@ -45,6 +50,7 @@ class Client(object):
             self.serial = 'anon'
 
         logger.debug(f"Connecting to MQTT broker at {host}:{port}.")
+        self._start_connection_time = time.time()
         self._mqtt_client.connect_async(host=host, port=port, keepalive=keepalive)
 
     def register_kit_rpc_handler(self, kit_rpc_handler):
@@ -64,12 +70,29 @@ class Client(object):
             qos = 1 # Deliver at least once.
         )
 
+    async def _watch_connection(self):
+        warnings = 0
+        while True:
+            next_warn_at = (
+                INITIAL_CONNECTION_WARNING_SECONDS
+                + BETWEEN_CONNECTION_WARNING_SECONDS * warnings
+            )
+            elapsed = time.time() - self._start_connection_time
+            if self.connected:
+                warnings = 0
+            elif elapsed >= next_warn_at:
+                # no connection for more than 10 seconds
+                logger.warning("No connection to MQTT broker for %d seconds." % elapsed)
+                warnings += 1
+            await trio.sleep(5)
+
     async def run(self):
         """
         Run the API client. Should only be called once.
         """
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self._server_rpc.run)
+            nursery.start_soon(self._watch_connection)
             self._trio_token = trio.hazmat.current_trio_token()
 
             try:
@@ -97,7 +120,7 @@ class Client(object):
         """
         Handles (re)connections.
         """
-        logger.info("Connected.")
+        logger.info("Connected to MQTT broker.")
         self._mqtt_client.subscribe(f'kit/{self.serial}/server-rpc/response', qos=1)
         self._mqtt_client.subscribe(f'kit/{self.serial}/kit-rpc/request', qos=1)
         self.connected = True
@@ -106,8 +129,9 @@ class Client(object):
         """
         Handles disconnections.
         """
-        logger.info("Disconnected.")
+        logger.info("Disconnected from MQTT broker.")
         self.connected = False
+        self._start_connection_time = time.time()
 
     def _on_message(self, client, user_data, msg):
         """
