@@ -8,6 +8,9 @@ from .errors import *
 logger = logging.getLogger("astroplant_kit.api.server_rpc")
 
 
+REQUEST_TIMEOUT_SECONDS = 15
+
+
 def _if_error_response_raise_exception_(response):
     """
     Raise an exception if the response is an error response.
@@ -81,13 +84,16 @@ class ServerRpc(object):
             now = datetime.datetime.now()
             while len(self._rpc_response_timeout) > 0:
                 (id, start) = self._rpc_response_timeout[0]
-                self._rpc_response_timeout.pop(0)
-                if (now - start).total_seconds() >= 2:
+                if (now - start).total_seconds() < REQUEST_TIMEOUT_SECONDS:
+                    # Not timed out.
+                    break
+                else:
+                    logger.warning("Dropping server RPC request %s: timed out.", id)
+                    self._rpc_response_timeout.pop(0)
                     if id in self._rpc_response_queue:
                         # Using with-block to explicitly close the channel.
                         async with self._rpc_response_queue[id]:
                             del self._rpc_response_queue[id]
-                    logger.debug("running server RPC response handler cleanup")
 
     async def version(self):
         """
