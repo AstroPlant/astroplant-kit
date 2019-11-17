@@ -17,6 +17,7 @@ import time
 import importlib
 import logging
 from astroplant_kit import peripheral
+from astroplant_kit.supervisor import Supervisor
 from .api import Client, RpcError
 from .cache import Cache
 
@@ -27,7 +28,8 @@ class Kit(object):
         self.halt = False
         self.startup_time = datetime.datetime.now()
 
-        self.peripheral_modules = {}
+        self._modules = {}
+        self._supervisor: Supervisor = None
         self.peripheral_manager = peripheral.PeripheralManager()
         self.api_client = api_client
         self.cache = cache
@@ -53,8 +55,8 @@ class Kit(object):
             parameters = peripheral_configuration['parameters'] if ('parameters' in peripheral_configuration) else {}
 
             self._import_modules([peripheral_configuration['module_name']])
-            peripheral_class = self.peripheral_modules[peripheral_configuration['module_name']].__dict__[peripheral_configuration['class_name']]
             peripheral_device = self.peripheral_manager.create_peripheral(peripheral_class, -1, "Debug display device", parameters)
+            peripheral_class = self._modules[peripheral_configuration['module_name']].__dict__[peripheral_configuration['class_name']]
             logger.info("Peripheral debug display device created.")
 
             log_handler = logging.StreamHandler(peripheral.DisplayDeviceStream(peripheral_device))
@@ -75,12 +77,17 @@ class Kit(object):
         logger.info(f"Activating configuration {configuration['description']}")
 
         modules = set()
+        modules.add(configuration['rulesSupervisorModuleName'])
+
         for peripheral_with_definition in configuration['peripherals']:
             definition = peripheral_with_definition['definition']
             modules.add(definition['moduleName'])
 
         self._import_modules(modules)
         self._configure_peripherals(configuration['peripherals'])
+
+        supervisor_class = self._modules[configuration['rulesSupervisorModuleName']].__dict__[configuration['rulesSupervisorClassName']]
+        self._supervisor = supervisor_class(self.peripheral_manager, configuration['rules'])
 
     def _import_modules(self, modules):
         """
@@ -91,7 +98,7 @@ class Kit(object):
         """
         for module_name in modules:
             module = importlib.import_module(module_name)
-            self.peripheral_modules[module_name] = module
+            self._modules[module_name] = module
 
     def _configure_peripherals(self, peripherals):
         """
@@ -107,7 +114,7 @@ class Kit(object):
             class_name = definition['className']
             try:
                 logger.debug(f'Initializing a peripheral of {module_name}.{class_name}')
-                peripheral_class = self.peripheral_modules[module_name].__dict__[class_name]
+                peripheral_class = self._modules[module_name].__dict__[class_name]
             except KeyError:
                 raise ValueError("Could not find class '%s' in module '%s'" % (class_name, module_name))
 
@@ -176,5 +183,6 @@ class Kit(object):
             measurements_rx = self.peripheral_manager.measurements_receiver()
 
             nursery.start_soon(self.peripheral_manager.run)
+            nursery.start_soon(self._supervisor.run)
             async for measurement in measurements_rx:
                 self.publish_measurement(measurement)

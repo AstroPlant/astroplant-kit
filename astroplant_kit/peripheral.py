@@ -7,6 +7,8 @@ import concurrent.futures
 import logging
 import collections
 
+from typing import Dict
+
 logger = logging.getLogger("astroplant_kit.peripheral")
 
 class PeripheralManager(object):
@@ -18,7 +20,7 @@ class PeripheralManager(object):
     """
 
     def __init__(self):
-        self.peripherals = []
+        self._peripherals: Dict[str, Peripheral] = {}
         self.measurement_txs = []
         self.event_loop = None
         self.quantity_types = []
@@ -108,18 +110,30 @@ class PeripheralManager(object):
             aggregate_type=aggregate_type,
         )
 
+    @property
     def runnable_peripherals(self):
         """
         :return: An iterable of all runnable peripherals.
         """
-        return filter(lambda peripheral: peripheral.RUNNABLE, self.peripherals)
+        return filter(lambda peripheral: peripheral.RUNNABLE, self._peripherals.values())
+
+    def get_peripheral_by_name(self, name):
+        """
+        :param name: The name of the peripheral to get.
+        :return: Get the peripheral with the given name, or None if no such
+        peripheral exists.
+        """
+        if name in self._peripherals:
+            return self._peripherals[name]
+        else:
+            return None
 
     async def run(self):
         """
         Run all runnable peripherals and broadcast measurements.
         """
         async with trio.open_nursery() as nursery:
-            for peripheral in self.runnable_peripherals():
+            for peripheral in self.runnable_peripherals:
                 nursery.start_soon(peripheral.run)
 
             async for measurement in self._measurement_rx:
@@ -152,6 +166,7 @@ class PeripheralManager(object):
         :param configuration: The instantiation paramaters (configuration) of the peripheral.
         :return: The created peripheral.
         """
+        logger.debug("creating peripheral %s", name)
 
         # Instantiate peripheral
         peripheral = peripheral_class(id, name, self, configuration=configuration)
@@ -159,7 +174,7 @@ class PeripheralManager(object):
         # Set message publication handle
         peripheral._set_publish_handle(self._publish_handle)
 
-        self.peripherals.append(peripheral)
+        self._peripherals[name] = peripheral
 
         return peripheral
 
