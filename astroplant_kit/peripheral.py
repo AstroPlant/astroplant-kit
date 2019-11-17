@@ -266,14 +266,17 @@ class Sensor(Peripheral):
 
     RUNNABLE = True
 
-    #: Amount of time in seconds to wait between making measurements
-    TIME_SLEEP_BETWEEN_MEASUREMENTS = 2.0
+    #: Default interval in seconds to wait between taking measurements.
+    DEFAULT_MEASUREMENT_INTERVAL = 60
 
-    #: Amount of time in seconds over which measurements are reduced before publishing them for storage
-    TIME_REDUCE_MEASUREMENTS = 60 # 3600.0
+    #: Default interval in seconds over which measurements are aggregated.
+    DEFAULT_AGGREGATE_INTERVAL = 60 * 30
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.measurement_interval = self.DEFAULT_MEASUREMENT_INTERVAL
+        self.aggregate_interval = self.DEFAULT_AGGREGATE_INTERVAL
+
         self.measurements = []
         self.reducers = [
             {"name": "count", "fn": lambda values: len(values)},
@@ -342,7 +345,7 @@ class Sensor(Peripheral):
 
                 # Publish the measurement
                 await self._publish_measurement(measurement)
-            await trio.sleep(self.TIME_SLEEP_BETWEEN_MEASUREMENTS)
+            await trio.sleep(self.measurement_interval)
 
     async def _reduce_measurements(self):
         """
@@ -351,7 +354,7 @@ class Sensor(Peripheral):
         while True:
             start_datetime = datetime.datetime.utcnow()
 
-            await trio.sleep(self.TIME_REDUCE_MEASUREMENTS)
+            await trio.sleep(self.aggregate_interval)
 
             self.logger.debug("Reducing measurements. %s" % len(self.measurements))
 
