@@ -1,9 +1,9 @@
+import logging
 import trio
 import paho.mqtt.client as mqtt
 import json
 import time
 from io import BytesIO
-import logging
 
 from .schema import astroplant_capnp
 from .server_rpc import ServerRpc

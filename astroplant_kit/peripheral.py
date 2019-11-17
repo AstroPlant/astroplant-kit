@@ -21,6 +21,7 @@ class PeripheralManager(object):
 
     def __init__(self):
         self._peripherals: Dict[str, Peripheral] = {}
+        self._debug_display: Peripheral = None
         self.measurement_txs = []
         self.event_loop = None
         self.quantity_types = []
@@ -128,6 +129,13 @@ class PeripheralManager(object):
         else:
             return None
 
+    async def run_debug_display(self):
+        """
+        Run the debug display device.
+        """
+        if self._debug_display:
+            await self._debug_display.run()
+
     async def run(self):
         """
         Run all runnable peripherals and broadcast measurements.
@@ -175,6 +183,25 @@ class PeripheralManager(object):
         peripheral._set_publish_handle(self._publish_handle)
 
         self._peripherals[name] = peripheral
+
+        return peripheral
+
+    def create_debug_display(self, peripheral_class, configuration):
+        """
+        Create a peripheral used for displaying debug messages.
+
+        :param peripheral_class: The class of the peripheral to add.
+        :param configuration: The instantiation parameters (configuration) of the peripheral.
+        """
+        logger.debug("creating debug display peripheral")
+
+        # Instantiate peripheral
+        peripheral = peripheral_class(-1, "debug-display-device", self, configuration=configuration)
+
+        # Set message publication handle
+        peripheral._set_publish_handle(self._publish_handle)
+
+        self._debug_display = peripheral
 
         return peripheral
 
@@ -516,9 +543,15 @@ class Display(Peripheral):
 
         :param msg: The message to be displayed.
         """
+        import threading
         self._log_message_queue.append(msg)
         if self._trio_token is not None:
-            trio.from_thread.run_sync(self._condition_notify, trio_token=self._trio_token)
+            # Logging could be called from within a Trio task or an external
+            # thread. For simplicity, always spawn a new thread.
+            def t():
+                trio.from_thread.run(self._condition_notify, trio_token=self._trio_token)
+            thread = threading.Thread(target=t, daemon=True)
+            thread.start()
 
     @abc.abstractmethod
     def display(self, str):
