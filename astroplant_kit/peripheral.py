@@ -1,10 +1,10 @@
+import logging
 import abc
 import sys
 import collections
 import datetime
+import uuid
 import trio
-import concurrent.futures
-import logging
 import collections
 
 from typing import Dict
@@ -470,6 +470,7 @@ class Measurement(object):
         end_datetime=None,
         aggregate_type=None,
     ):
+        self.id = uuid.uuid4()
         self.peripheral = peripheral
         self.quantity_type = quantity_type
         self.value = value
@@ -478,7 +479,7 @@ class Measurement(object):
         self.aggregate_type = aggregate_type
 
     def __str__(self):
-        return "%s-%s - %s %s %s: %s %s" % (
+        return "%s-%s - %s %s %s: %s %s [%s]" % (
             self.start_datetime,
             self.end_datetime,
             self.aggregate_type,
@@ -486,6 +487,7 @@ class Measurement(object):
             self.quantity_type.physical_quantity,
             self.value,
             self.quantity_type.physical_unit,
+            self.id,
         )
 
 

@@ -172,10 +172,11 @@ class Client(object):
         Publish a (real-time) raw measurement.
         """
         logger.debug(
-            f"Sending raw measurement: {measurement.peripheral.name}: {measurement.quantity_type.physical_quantity} {measurement.value} {measurement.quantity_type.physical_unit_short}"
+            f"Sending raw measurement: {measurement.peripheral.name}: {measurement.quantity_type.physical_quantity} {measurement.value} {measurement.quantity_type.physical_unit_short} [{measurement.id}]"
         )
 
         raw_measurement_msg = astroplant_capnp.RawMeasurement.new_message(
+            id=measurement.id.bytes,
             kitSerial="",  # Filled on the backend-side for security reasons
             datetime=round(measurement.end_datetime.timestamp() * 1000),
             peripheral=measurement.peripheral.get_id(),
@@ -194,11 +195,11 @@ class Client(object):
         Publish an aggregate measurement.
         """
         logger.debug(
-            f"Sending aggregate measurement: {measurement.peripheral.name}: {measurement.aggregate_type} {measurement.quantity_type.physical_quantity} in {measurement.quantity_type.physical_unit_short}: {measurement.value}"
+            f"Sending aggregate measurement: {measurement.peripheral.name}: {measurement.aggregate_type} {measurement.quantity_type.physical_quantity} in {measurement.quantity_type.physical_unit_short}: {measurement.value} [{measurement.id}]"
         )
-        msg = BytesIO()
 
         aggregate_measurement_msg = astroplant_capnp.AggregateMeasurement.new_message(
+            id=measurement.id.bytes,
             kitSerial="",  # Filled on the backend-side for security reasons
             datetimeStart=round(measurement.start_datetime.timestamp() * 1000),
             datetimeEnd=round(measurement.end_datetime.timestamp() * 1000),
@@ -210,6 +211,6 @@ class Client(object):
 
         self._mqtt_client.publish(
             topic=f"kit/{self.serial}/measurement/aggregate",
-            payload=msg.getvalue(),
+            payload=aggregate_measurement_msg.to_bytes_packed(),
             qos=2,  # Deliver exactly once. Maybe downgrade to `1`: deliver at least once.
         )

@@ -1,21 +1,23 @@
 @0xfab5802082af6f74;
 
 struct RawMeasurement {
-  kitSerial @0 :Text;
-  datetime @1 :UInt64;
-  peripheral @2 :Int32;
-  quantityType @3 :Int32;
-  value @4 :Float64;
+  id @0 :Data;
+  kitSerial @1 :Text;
+  datetime @2 :UInt64;
+  peripheral @3 :Int32;
+  quantityType @4 :Int32;
+  value @5 :Float64;
 }
 
 struct AggregateMeasurement {
-  kitSerial @0 :Text;
-  datetimeStart @1 :UInt64;
-  datetimeEnd @2 :UInt64;
-  peripheral @3 :Int32;
-  quantityType @4 :Int32;
-  aggregateType @5 :Text;
-  value @6 :Float64;
+  id @0 :Data;
+  kitSerial @1 :Text;
+  datetimeStart @2 :UInt64;
+  datetimeEnd @3 :UInt64;
+  peripheral @4 :Int32;
+  quantityType @5 :Int32;
+  aggregateType @6 :Text;
+  value @7 :Float64;
 }
 
 struct RpcError {
