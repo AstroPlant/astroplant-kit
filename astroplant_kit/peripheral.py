@@ -362,7 +362,7 @@ class Sensor(Peripheral):
             # Group measurements by physical quantity and unit
             grouped_measurements = collections.defaultdict(list)
             for measurement in self.measurements:
-                grouped_measurements[(measurement.physical_quantity, measurement.physical_unit)].append(measurement)
+                grouped_measurements[(measurement.quantity_type.physical_quantity, measurement.quantity_type.physical_unit)].append(measurement)
 
             # Emty the list
             self.measurements = []
@@ -409,8 +409,8 @@ class Sensor(Peripheral):
         return [
             self.manager.create_aggregate_measurement(
                 measurements[0].peripheral,
-                measurements[0].physical_quantity,
-                measurements[0].physical_unit,
+                measurements[0].quantity_type.physical_quantity,
+                measurements[0].quantity_type.physical_unit,
                 reducer['fn'](values),
                 reducer['name'],
                 start_datetime=start_datetime,
