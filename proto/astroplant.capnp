@@ -31,8 +31,8 @@ struct ServerRpcRequest {
 
   union {
     version @1 :Void;
-    getActiveConfiguration @2 :Void;
-    getQuantityTypes @3 :Void;
+    getQuantityTypes @2 :Void;
+    getActiveConfiguration @3 :Void;
   }
 }
 
@@ -42,8 +42,8 @@ struct ServerRpcResponse {
   union {
     error @1 :RpcError;
     version @2 :Text;
-    getActiveConfiguration @3 :ActiveConfiguration;
-    getQuantityTypes @4 :Text;
+    getQuantityTypes @3 :Text;
+    getActiveConfiguration @4 :ActiveConfiguration;
   }
 }
 
