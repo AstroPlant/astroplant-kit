@@ -197,7 +197,7 @@ class Client(object):
         """
         Publish an aggregate measurement.
         """
-        logger.debug(f"Sending aggregate measurement: {measurement.peripheral.name}: {measurement.aggregate_type} {measurement.quantity_type.physical_quantity} {measurement.value} {measurement.quantity_type.physical_unit_short}")
+        logger.debug(f"Sending aggregate measurement: {measurement.peripheral.name}: {measurement.aggregate_type} {measurement.quantity_type.physical_quantity} in {measurement.quantity_type.physical_unit_short}: {measurement.value}")
         msg = BytesIO()
 
         aggregate_measurement_msg = astroplant_capnp.AggregateMeasurement.new_message(
