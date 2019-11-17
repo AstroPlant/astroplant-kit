@@ -7,6 +7,7 @@ from typing import Dict, Any, List
 import abc
 from ..peripheral import PeripheralManager
 
+
 class Supervisor:
     def __init__(self, peripheral_manager: PeripheralManager, rules: Dict[str, Any]):
         self.peripheral_manager = peripheral_manager
@@ -18,4 +19,3 @@ class Supervisor:
         Asynchronously run the supervisor.
         """
         raise NotImplementedError()
-

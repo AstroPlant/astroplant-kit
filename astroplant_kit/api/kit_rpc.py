@@ -11,6 +11,7 @@ class KitRpcHandler(abc.ABC):
     """
     Abstract class representing the kit RPC handler interface.
     """
+
     @abc.abstractmethod
     async def version() -> str:
         pass
@@ -24,6 +25,7 @@ class KitRpc(object):
     """
     Handles MQTT messages to implement the kit RPC system.
     """
+
     def __init__(self, kit_rpc_response_handle):
         self._kit_rpc_response_handle = kit_rpc_response_handle
         self._handler = None
@@ -40,16 +42,16 @@ class KitRpc(object):
     async def _handle_request(self, request):
         rpc = self._handler
 
-        response = astroplant_capnp.KitRpcResponse.new_message(id = request.id)
+        response = astroplant_capnp.KitRpcResponse.new_message(id=request.id)
 
         which = request.which()
-        if which == 'version':
+        if which == "version":
             response.version = await rpc.version()
-        elif which == 'uptime':
+        elif which == "uptime":
             response.uptime = await rpc.uptime()
         else:
-            logger.warn(f'Received unknown kit RPC request: {which}')
-            error = astroplant_capnp.RpcError.new_message(methodNotFound = None)
+            logger.warn(f"Received unknown kit RPC request: {which}")
+            error = astroplant_capnp.RpcError.new_message(methodNotFound=None)
             response.error = error
 
         self._send_response(response)

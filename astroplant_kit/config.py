@@ -1,5 +1,6 @@
 import toml
 
+
 def read_config(file):
     """
     Read the configuration file.

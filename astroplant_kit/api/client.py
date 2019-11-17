@@ -20,6 +20,7 @@ class Client(object):
     """
     AstroPlant API Client class implementing methods to interact with the AstroPlant API.
     """
+
     def __init__(self, host, port, keepalive=60, auth={}):
         self.connected = False
 
@@ -40,14 +41,13 @@ class Client(object):
         self._mqtt_client.reconnect_delay_set(min_delay=1, max_delay=128)
 
         if auth:
-            self.serial = auth['serial']
+            self.serial = auth["serial"]
             logger.warn("TODO FIX username")
             self._mqtt_client.username_pw_set(
-                username="k_develop", #auth['serial'],
-                password=auth['secret'],
+                username="k_develop", password=auth["secret"]  # auth['serial'],
             )
         else:
-            self.serial = 'anon'
+            self.serial = "anon"
 
         logger.debug(f"Connecting to MQTT broker at {host}:{port}.")
         self._start_connection_time = time.time()
@@ -58,16 +58,16 @@ class Client(object):
 
     def _server_rpc_request(self, payload):
         self._mqtt_client.publish(
-            topic = f'kit/{self.serial}/server-rpc/request',
-            payload = payload,
-            qos = 1 # Deliver at least once.
+            topic=f"kit/{self.serial}/server-rpc/request",
+            payload=payload,
+            qos=1,  # Deliver at least once.
         )
 
     def _kit_rpc_response(self, payload):
         self._mqtt_client.publish(
-            topic = f'kit/{self.serial}/kit-rpc/response',
-            payload = payload,
-            qos = 1 # Deliver at least once.
+            topic=f"kit/{self.serial}/kit-rpc/response",
+            payload=payload,
+            qos=1,  # Deliver at least once.
         )
 
     async def _watch_connection(self):
@@ -121,8 +121,8 @@ class Client(object):
         Handles (re)connections.
         """
         logger.info("Connected to MQTT broker.")
-        self._mqtt_client.subscribe(f'kit/{self.serial}/server-rpc/response', qos=1)
-        self._mqtt_client.subscribe(f'kit/{self.serial}/kit-rpc/request', qos=1)
+        self._mqtt_client.subscribe(f"kit/{self.serial}/server-rpc/response", qos=1)
+        self._mqtt_client.subscribe(f"kit/{self.serial}/kit-rpc/request", qos=1)
         self.connected = True
 
     def _on_disconnect(self, client, user_data, rc):
@@ -139,9 +139,7 @@ class Client(object):
         """
         logger.debug(f"MQTT received message: {msg}")
         resp = trio.from_thread.run(
-            self._message_sender.send,
-            msg,
-            trio_token=self._trio_token,
+            self._message_sender.send, msg, trio_token=self._trio_token
         )
 
     async def _handle_message(self, message):
@@ -155,12 +153,8 @@ class Client(object):
         topics = topic.split("/")
 
         router = {
-            'server-rpc': {
-                'response': self._server_rpc._on_response,
-            },
-            'kit-rpc': {
-                'request': self._kit_rpc._on_request,
-            },
+            "server-rpc": {"response": self._server_rpc._on_response},
+            "kit-rpc": {"request": self._kit_rpc._on_request},
         }
 
         if len(topics) >= 2:
@@ -177,41 +171,45 @@ class Client(object):
         """
         Publish a (real-time) raw measurement.
         """
-        logger.debug(f"Sending raw measurement: {measurement.peripheral.name}: {measurement.quantity_type.physical_quantity} {measurement.value} {measurement.quantity_type.physical_unit_short}")
+        logger.debug(
+            f"Sending raw measurement: {measurement.peripheral.name}: {measurement.quantity_type.physical_quantity} {measurement.value} {measurement.quantity_type.physical_unit_short}"
+        )
 
         raw_measurement_msg = astroplant_capnp.RawMeasurement.new_message(
-                kitSerial = '', # Filled on the backend-side for security reasons
-                datetime = round(measurement.end_datetime.timestamp() * 1000),
-                peripheral = measurement.peripheral.get_id(),
-                quantityType = measurement.quantity_type.id,
-                value = measurement.value
-            )
+            kitSerial="",  # Filled on the backend-side for security reasons
+            datetime=round(measurement.end_datetime.timestamp() * 1000),
+            peripheral=measurement.peripheral.get_id(),
+            quantityType=measurement.quantity_type.id,
+            value=measurement.value,
+        )
 
         self._mqtt_client.publish(
-            topic = f'kit/{self.serial}/measurement/raw',
-            payload = raw_measurement_msg.to_bytes_packed(),
-            qos = 0 # Deliver at most once.
+            topic=f"kit/{self.serial}/measurement/raw",
+            payload=raw_measurement_msg.to_bytes_packed(),
+            qos=0,  # Deliver at most once.
         )
 
     def publish_aggregate_measurement(self, measurement):
         """
         Publish an aggregate measurement.
         """
-        logger.debug(f"Sending aggregate measurement: {measurement.peripheral.name}: {measurement.aggregate_type} {measurement.quantity_type.physical_quantity} in {measurement.quantity_type.physical_unit_short}: {measurement.value}")
+        logger.debug(
+            f"Sending aggregate measurement: {measurement.peripheral.name}: {measurement.aggregate_type} {measurement.quantity_type.physical_quantity} in {measurement.quantity_type.physical_unit_short}: {measurement.value}"
+        )
         msg = BytesIO()
 
         aggregate_measurement_msg = astroplant_capnp.AggregateMeasurement.new_message(
-                kitSerial = '', # Filled on the backend-side for security reasons
-                datetimeStart = round(measurement.start_datetime.timestamp() * 1000),
-                datetimeEnd = round(measurement.end_datetime.timestamp() * 1000),
-                peripheral = measurement.peripheral.get_id(),
-                quantityType = measurement.quantity_type.id,
-                aggregateType = measurement.aggregate_type,
-                value = measurement.value
-            )
+            kitSerial="",  # Filled on the backend-side for security reasons
+            datetimeStart=round(measurement.start_datetime.timestamp() * 1000),
+            datetimeEnd=round(measurement.end_datetime.timestamp() * 1000),
+            peripheral=measurement.peripheral.get_id(),
+            quantityType=measurement.quantity_type.id,
+            aggregateType=measurement.aggregate_type,
+            value=measurement.value,
+        )
 
         self._mqtt_client.publish(
-            topic = f'kit/{self.serial}/measurement/aggregate',
-            payload = msg.getvalue(),
-            qos = 2 # Deliver exactly once. Maybe downgrade to `1`: deliver at least once.
+            topic=f"kit/{self.serial}/measurement/aggregate",
+            payload=msg.getvalue(),
+            qos=2,  # Deliver exactly once. Maybe downgrade to `1`: deliver at least once.
         )

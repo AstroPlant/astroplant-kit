@@ -11,6 +11,7 @@ from typing import Dict
 
 logger = logging.getLogger("astroplant_kit.peripheral")
 
+
 class PeripheralManager(object):
     """
     A peripheral device manager; this manager keeps track of all peripherals,
@@ -37,10 +38,10 @@ class PeripheralManager(object):
         self.quantity_types = list(
             map(
                 lambda qt: QuantityType(
-                    qt['id'],
-                    qt['physicalQuantity'],
-                    qt['physicalUnit'],
-                    physical_unit_symbol = qt['physicalUnitSymbol'] or None,
+                    qt["id"],
+                    qt["physicalQuantity"],
+                    qt["physicalUnit"],
+                    physical_unit_symbol=qt["physicalUnitSymbol"] or None,
                 ),
                 quantity_types,
             )
@@ -61,8 +62,9 @@ class PeripheralManager(object):
     def _get_quantity_type(self, physical_quantity, physical_unit):
         for qt in self.quantity_types:
             if (
-                    qt.physical_quantity == physical_quantity
-                    and qt.physical_unit == physical_unit):
+                qt.physical_quantity == physical_quantity
+                and qt.physical_unit == physical_unit
+            ):
                 return qt
         return None
 
@@ -72,8 +74,8 @@ class PeripheralManager(object):
         physical_quantity,
         physical_unit,
         value,
-        start_datetime = None,
-        end_datetime = None,
+        start_datetime=None,
+        end_datetime=None,
     ):
         quantity_type = self._get_quantity_type(physical_quantity, physical_unit)
         if quantity_type == None:
@@ -95,8 +97,8 @@ class PeripheralManager(object):
         physical_unit,
         value,
         aggregate_type,
-        start_datetime = None,
-        end_datetime = None,
+        start_datetime=None,
+        end_datetime=None,
     ):
         quantity_type = self._get_quantity_type(physical_quantity, physical_unit)
         if quantity_type == None:
@@ -116,7 +118,9 @@ class PeripheralManager(object):
         """
         :return: An iterable of all runnable peripherals.
         """
-        return filter(lambda peripheral: peripheral.RUNNABLE, self._peripherals.values())
+        return filter(
+            lambda peripheral: peripheral.RUNNABLE, self._peripherals.values()
+        )
 
     def get_peripheral_by_name(self, name):
         """
@@ -196,7 +200,9 @@ class PeripheralManager(object):
         logger.debug("creating debug display peripheral")
 
         # Instantiate peripheral
-        peripheral = peripheral_class(-1, "debug-display-device", self, configuration=configuration)
+        peripheral = peripheral_class(
+            -1, "debug-display-device", self, configuration=configuration
+        )
 
         # Set message publication handle
         peripheral._set_publish_handle(self._publish_handle)
@@ -204,6 +210,7 @@ class PeripheralManager(object):
         self._debug_display = peripheral
 
         return peripheral
+
 
 class Peripheral(object):
     """
@@ -251,6 +258,7 @@ class Peripheral(object):
     def __str__(self):
         return self.name
 
+
 class Sensor(Peripheral):
     """
     Abstract sensor base class.
@@ -268,31 +276,19 @@ class Sensor(Peripheral):
         super().__init__(*args, **kwargs)
         self.measurements = []
         self.reducers = [
-            {
-                'name': 'count',
-                'fn': lambda values: len(values)
-            },
-            {
-                'name': 'average',
-                'fn': lambda values: sum(values) / len(values),
-            },
-            {
-                'name': 'minimum',
-                'fn': lambda values: min(values)
-            },
-            {
-                'name': 'maximum',
-                'fn': lambda values: max(values)
-            }
+            {"name": "count", "fn": lambda values: len(values)},
+            {"name": "average", "fn": lambda values: sum(values) / len(values)},
+            {"name": "minimum", "fn": lambda values: min(values)},
+            {"name": "maximum", "fn": lambda values: max(values)},
         ]
 
     def create_raw_measurement(
-            self,
-            physical_quantity,
-            physical_unit,
-            value,
-            start_datetime = None,
-            end_datetime = None,
+        self,
+        physical_quantity,
+        physical_unit,
+        value,
+        start_datetime=None,
+        end_datetime=None,
     ):
         return self.manager.create_raw_measurement(
             self,
@@ -304,13 +300,13 @@ class Sensor(Peripheral):
         )
 
     def create_aggregate_measurement(
-            self,
-            physical_quantity,
-            physical_unit,
-            value,
-            aggregate_type,
-            start_datetime = None,
-            end_datetime = None,
+        self,
+        physical_quantity,
+        physical_unit,
+        value,
+        aggregate_type,
+        start_datetime=None,
+        end_datetime=None,
     ):
         return self.manager.create_aggregate_measurement(
             self,
@@ -362,7 +358,12 @@ class Sensor(Peripheral):
             # Group measurements by physical quantity and unit
             grouped_measurements = collections.defaultdict(list)
             for measurement in self.measurements:
-                grouped_measurements[(measurement.quantity_type.physical_quantity, measurement.quantity_type.physical_unit)].append(measurement)
+                grouped_measurements[
+                    (
+                        measurement.quantity_type.physical_quantity,
+                        measurement.quantity_type.physical_unit,
+                    )
+                ].append(measurement)
 
             # Emty the list
             self.measurements = []
@@ -411,13 +412,14 @@ class Sensor(Peripheral):
                 measurements[0].peripheral,
                 measurements[0].quantity_type.physical_quantity,
                 measurements[0].quantity_type.physical_unit,
-                reducer['fn'](values),
-                reducer['name'],
+                reducer["fn"](values),
+                reducer["name"],
                 start_datetime=start_datetime,
                 end_datetime=end_datetime,
             )
             for reducer in self.reducers
         ]
+
 
 class Actuator(Peripheral):
     """
@@ -457,13 +459,13 @@ class Measurement(object):
     """
 
     def __init__(
-            self,
-            peripheral,
-            quantity_type,
-            value,
-            start_datetime = None,
-            end_datetime = None,
-            aggregate_type = None
+        self,
+        peripheral,
+        quantity_type,
+        value,
+        start_datetime=None,
+        end_datetime=None,
+        aggregate_type=None,
     ):
         self.peripheral = peripheral
         self.quantity_type = quantity_type
@@ -473,7 +475,16 @@ class Measurement(object):
         self.aggregate_type = aggregate_type
 
     def __str__(self):
-        return "%s-%s - %s %s %s: %s %s" % (self.start_datetime, self.end_datetime, self.aggregate_type, self.peripheral, self.quantity_type.physical_quantity, self.value, self.quantity_type.physical_unit)
+        return "%s-%s - %s %s %s: %s %s" % (
+            self.start_datetime,
+            self.end_datetime,
+            self.aggregate_type,
+            self.peripheral,
+            self.quantity_type.physical_quantity,
+            self.value,
+            self.quantity_type.physical_unit,
+        )
+
 
 class Display(Peripheral):
     """
@@ -482,6 +493,7 @@ class Display(Peripheral):
     Todo: improve implementation, and add ability to somehow "rotate" messages, e.g. showing
     up-to-date measurement statistics.
     """
+
     RUNNABLE = True
 
     def __init__(self, *args):
@@ -515,12 +527,14 @@ class Display(Peripheral):
                     # No logs; display a measurement.
                     measurement = list(self._measurements.values())[idx]
 
-                    self.display("{quantity} ({peripheral})\n{value:.5g} {unit}".format(
-                        peripheral = measurement.peripheral,
-                        quantity = measurement.quantity_type.physical_quantity,
-                        value = measurement.value,
-                        unit = measurement.quantity_type.physical_unit_short,
-                    ))
+                    self.display(
+                        "{quantity} ({peripheral})\n{value:.5g} {unit}".format(
+                            peripheral=measurement.peripheral,
+                            quantity=measurement.quantity_type.physical_quantity,
+                            value=measurement.value,
+                            unit=measurement.quantity_type.physical_unit_short,
+                        )
+                    )
 
                     idx = (idx + 1) % len(self._measurements)
 
@@ -544,12 +558,16 @@ class Display(Peripheral):
         :param msg: The message to be displayed.
         """
         import threading
+
         self._log_message_queue.append(msg)
         if self._trio_token is not None:
             # Logging could be called from within a Trio task or an external
             # thread. For simplicity, always spawn a new thread.
             def t():
-                trio.from_thread.run(self._condition_notify, trio_token=self._trio_token)
+                trio.from_thread.run(
+                    self._condition_notify, trio_token=self._trio_token
+                )
+
             thread = threading.Thread(target=t, daemon=True)
             thread.start()
 
@@ -562,27 +580,33 @@ class Display(Peripheral):
         """
         raise NotImplementedError()
 
+
 class DebugDisplay(Display):
     """
     A trivial peripheral display device implementation printing messages to the terminal.
     """
+
     def __init__(self, *args, configuration):
         super().__init__(*args)
 
     def display(self, str):
         print("Debug Display: %s" % str)
 
+
 class BlackHoleDisplay(Display):
     """
     A trivial peripheral display device implementation ignoring all display messages.
     """
+
     def display(self, str):
         pass
+
 
 class DisplayDeviceStream(object):
     """
     A stream class to be used for loggers logging to peripheral display devices.
     """
+
     def __init__(self, peripheral_display_device):
         self.peripheral_display_device = peripheral_display_device
         self.str = ""
@@ -594,6 +618,7 @@ class DisplayDeviceStream(object):
         self.peripheral_display_device.add_log_message(self.str)
         self.str = ""
 
+
 class LocalDataLogger(Actuator):
     """
     A virtual peripheral device writing observations to internal storage.
@@ -601,13 +626,12 @@ class LocalDataLogger(Actuator):
 
     def __init__(self, *args, configuration):
         super().__init__(*args)
-        self.storage_path = configuration['storagePath']
+        self.storage_path = configuration["storagePath"]
 
         # Subscribe to all aggregate measurements.
         self.manager.subscribe_predicate(
-            lambda m: m.aggregate_type is not None,
-            self._store_measurement
-        );
+            lambda m: m.aggregate_type is not None, self._store_measurement
+        )
 
     def _store_measurement(self, measurement):
         # Import required modules.
@@ -616,7 +640,10 @@ class LocalDataLogger(Actuator):
 
         measurement_dict = measurement.__dict__
 
-        file_name = "%s-%s.csv" % (measurement.end_datetime.strftime("%Y%m%d"), measurement.physical_quantity)
+        file_name = "%s-%s.csv" % (
+            measurement.end_datetime.strftime("%Y%m%d"),
+            measurement.physical_quantity,
+        )
         path = os.path.join(self.storage_path, file_name)
 
         # Check whether the file exists.
@@ -625,7 +652,7 @@ class LocalDataLogger(Actuator):
         # Create file and directories if it does not exist yet.
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
-        with open(path, 'a', newline='') as csv_file:
+        with open(path, "a", newline="") as csv_file:
             # Get the measurement object field names.
             # Sort them to ensure csv headers have
             # consistent field ordering.

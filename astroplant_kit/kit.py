@@ -5,7 +5,8 @@ Contains the main kit routines.
 # Make sure astroplant_kit is in the path
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.dirname(__file__) + '/..'))
+
+sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/.."))
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 import datetime
@@ -22,6 +23,7 @@ from .api import Client, RpcError
 from .cache import Cache
 
 logger = logging.getLogger("astroplant_kit.kit")
+
 
 class Kit(object):
     def __init__(self, api_client: Client, debug_configuration, cache: Cache):
@@ -47,19 +49,29 @@ class Kit(object):
         configuration for a Display module to write to, as well as the level of logging
         required.
         """
-        debug_level = debug_configuration['level']
-        if 'peripheral_display' in debug_configuration:
+        debug_level = debug_configuration["level"]
+        if "peripheral_display" in debug_configuration:
             logger.info("Initialising peripheral debug display device.")
-            peripheral_configuration = debug_configuration['peripheral_display']
+            peripheral_configuration = debug_configuration["peripheral_display"]
 
-            parameters = peripheral_configuration['parameters'] if ('parameters' in peripheral_configuration) else {}
+            parameters = (
+                peripheral_configuration["parameters"]
+                if ("parameters" in peripheral_configuration)
+                else {}
+            )
 
-            self._import_modules([peripheral_configuration['module_name']])
-            peripheral_class = self._modules[peripheral_configuration['module_name']].__dict__[peripheral_configuration['class_name']]
-            peripheral_device = self.peripheral_manager.create_debug_display(peripheral_class, parameters)
+            self._import_modules([peripheral_configuration["module_name"]])
+            peripheral_class = self._modules[
+                peripheral_configuration["module_name"]
+            ].__dict__[peripheral_configuration["class_name"]]
+            peripheral_device = self.peripheral_manager.create_debug_display(
+                peripheral_class, parameters
+            )
             logger.info("Peripheral debug display device created.")
 
-            log_handler = logging.StreamHandler(peripheral.DisplayDeviceStream(peripheral_device))
+            log_handler = logging.StreamHandler(
+                peripheral.DisplayDeviceStream(peripheral_device)
+            )
             log_handler.setLevel(debug_level)
             formatter = logging.Formatter("%(levelname)s\n%(message)s")
             log_handler.setFormatter(formatter)
@@ -77,17 +89,21 @@ class Kit(object):
         logger.info(f"Activating configuration {configuration['description']}")
 
         modules = set()
-        modules.add(configuration['rulesSupervisorModuleName'])
+        modules.add(configuration["rulesSupervisorModuleName"])
 
-        for peripheral_with_definition in configuration['peripherals']:
-            definition = peripheral_with_definition['definition']
-            modules.add(definition['moduleName'])
+        for peripheral_with_definition in configuration["peripherals"]:
+            definition = peripheral_with_definition["definition"]
+            modules.add(definition["moduleName"])
 
         self._import_modules(modules)
-        self._configure_peripherals(configuration['peripherals'])
+        self._configure_peripherals(configuration["peripherals"])
 
-        supervisor_class = self._modules[configuration['rulesSupervisorModuleName']].__dict__[configuration['rulesSupervisorClassName']]
-        self._supervisor = supervisor_class(self.peripheral_manager, configuration['rules'])
+        supervisor_class = self._modules[
+            configuration["rulesSupervisorModuleName"]
+        ].__dict__[configuration["rulesSupervisorClassName"]]
+        self._supervisor = supervisor_class(
+            self.peripheral_manager, configuration["rules"]
+        )
 
     def _import_modules(self, modules):
         """
@@ -107,18 +123,26 @@ class Kit(object):
         :param peripheral_configurations: An iterable of peripheral configuration dicts.
         """
         for peripheral_with_definition in peripherals:
-            peripheral = peripheral_with_definition['peripheral']
-            definition = peripheral_with_definition['definition']
+            peripheral = peripheral_with_definition["peripheral"]
+            definition = peripheral_with_definition["definition"]
 
-            module_name = definition['moduleName']
-            class_name = definition['className']
+            module_name = definition["moduleName"]
+            class_name = definition["className"]
             try:
-                logger.debug(f'Initializing a peripheral of {module_name}.{class_name}')
+                logger.debug(f"Initializing a peripheral of {module_name}.{class_name}")
                 peripheral_class = self._modules[module_name].__dict__[class_name]
             except KeyError:
-                raise ValueError("Could not find class '%s' in module '%s'" % (class_name, module_name))
+                raise ValueError(
+                    "Could not find class '%s' in module '%s'"
+                    % (class_name, module_name)
+                )
 
-            self.peripheral_manager.create_peripheral(peripheral_class, peripheral['id'], peripheral['name'], peripheral['configuration'])
+            self.peripheral_manager.create_peripheral(
+                peripheral_class,
+                peripheral["id"],
+                peripheral["name"],
+                peripheral["configuration"],
+            )
 
     def publish_measurement(self, measurement):
         """
@@ -135,7 +159,7 @@ class Kit(object):
         """
         Run the kit.
         """
-        logger.info('Starting.')
+        logger.info("Starting.")
 
         try:
             await self.bootstrap()
@@ -163,21 +187,29 @@ class Kit(object):
             try:
                 configuration = await self._fetch_and_store_configuration()
             except RpcError as e:
-                logger.warn(f'Could not get configuration from server, trying cache. Original error: {e}')
+                logger.warn(
+                    f"Could not get configuration from server, trying cache. Original error: {e}"
+                )
                 try:
                     configuration = self.cache.read_configuration()
                 except Exception as e:
-                    logger.warn(f'Could not get configuration from cache, stoping. Original error: {e}')
+                    logger.warn(
+                        f"Could not get configuration from cache, stoping. Original error: {e}"
+                    )
                     return
 
             try:
                 quantity_types = await self._fetch_and_store_quantity_types()
             except RpcError as e:
-                logger.warn(f'Could not get quantity types from server, trying cache. Original error: {e}')
+                logger.warn(
+                    f"Could not get quantity types from server, trying cache. Original error: {e}"
+                )
                 try:
                     quantity_types = self.cache.read_quantity_types()
                 except Exception as e:
-                    logger.warn(f'Could not get quantity types from cache, stoping. Original error: {e}')
+                    logger.warn(
+                        f"Could not get quantity types from cache, stoping. Original error: {e}"
+                    )
                     return
 
             self.peripheral_manager.set_quantity_types(quantity_types)

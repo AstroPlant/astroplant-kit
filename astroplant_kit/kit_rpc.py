@@ -5,6 +5,7 @@ import astroplant_kit.api
 
 logger = logging.getLogger("astroplant_kit.kit_rpc")
 
+
 class KitRpc(astroplant_kit.api.KitRpcHandler):
     def __init__(self, kit):
         self.kit = kit

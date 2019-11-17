@@ -13,6 +13,7 @@ from .supervisor import Supervisor
 
 logger = logging.getLogger("astroplant_kit.supervisor")
 
+
 class AstroplantSupervisorV1(Supervisor):
     """
     The AstroPlant supervisor assumes peripheral devices' commands are

@@ -15,14 +15,14 @@ def _if_error_response_raise_exception_(response):
     """
     Raise an exception if the response is an error response.
     """
-    if response.which() == 'error':
+    if response.which() == "error":
         error = response.error
         error_which = error.which()
-        if error_which == 'other':
+        if error_which == "other":
             raise RpcErrorOther()
-        elif error_which == 'methodNotFound':
+        elif error_which == "methodNotFound":
             raise RpcErrorMethodNotFound()
-        elif error_which == 'rateLimit':
+        elif error_which == "rateLimit":
             raise RpcErrorRateLimit(error.rateLimit)
         else:
             raise RpcErrorUnknown()
@@ -32,6 +32,7 @@ class ServerRpc(object):
     """
     Handles MQTT messages to implement the server RPC system.
     """
+
     def __init__(self, server_rpc_request_handle):
         self._request_handle = server_rpc_request_handle
 
@@ -72,11 +73,16 @@ class ServerRpc(object):
         response_sender, response_receiver = trio.open_memory_channel(0)
 
         value_callback = lambda value: loop.call_soon_threadsafe(fut.set_result, value)
-        exception_callback = lambda value: loop.call_soon_threadsafe(fut.set_exception, value)
+        exception_callback = lambda value: loop.call_soon_threadsafe(
+            fut.set_exception, value
+        )
         self._rpc_response_queue[request_id] = response_sender
         self._rpc_response_timeout.append((request_id, datetime.datetime.now()))
 
-        return (astroplant_capnp.ServerRpcRequest.new_message(id = request_id), response_receiver)
+        return (
+            astroplant_capnp.ServerRpcRequest.new_message(id=request_id),
+            response_receiver,
+        )
 
     async def _cleanup_rpc_response_queue(self):
         while True:
@@ -109,7 +115,7 @@ class ServerRpc(object):
             raise ServerRpcRequestTimedOut()
 
         _if_error_response_raise_exception_(response)
-        if response.which() == 'version':
+        if response.which() == "version":
             return response.version
         else:
             raise RpcInvalidResponse()
@@ -128,9 +134,9 @@ class ServerRpc(object):
             raise ServerRpcRequestTimedOut()
 
         _if_error_response_raise_exception_(response)
-        if response.which() == 'getActiveConfiguration':
+        if response.which() == "getActiveConfiguration":
             maybe_configuration = response.getActiveConfiguration
-            if maybe_configuration.which() == 'configuration':
+            if maybe_configuration.which() == "configuration":
                 return json.loads(maybe_configuration.configuration)
             else:
                 return None
@@ -151,7 +157,7 @@ class ServerRpc(object):
             raise ServerRpcRequestTimedOut()
 
         _if_error_response_raise_exception_(response)
-        if response.which() == 'getQuantityTypes':
+        if response.which() == "getQuantityTypes":
             return json.loads(response.getQuantityTypes)
         else:
             raise RpcInvalidResponse()
