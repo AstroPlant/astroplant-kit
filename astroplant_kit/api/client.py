@@ -44,7 +44,7 @@ class Client(object):
             self.serial = auth["serial"]
             logger.warn("TODO FIX username")
             self._mqtt_client.username_pw_set(
-                username="k_develop", password=auth["secret"]  # auth['serial'],
+                username=auth["serial"], password=auth["secret"],
             )
         else:
             self.serial = "anon"
