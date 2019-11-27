@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 
 import astroplant_kit
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
+from setuptools import setup, find_packages
 
 
 with open('requirements.txt') as f:
@@ -17,6 +14,6 @@ setup(name='astroplant-kit',
       author_email='thomas@kepow.org',
       url='https://astroplant.io',
       scripts=['scripts/astroplant-kit'],
-      packages=['astroplant_kit',],
+      packages=find_packages(),
       install_requires=requirements,
      )
