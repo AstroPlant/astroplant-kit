@@ -15,7 +15,7 @@ setup(name='astroplant-kit',
       url='https://astroplant.io',
       scripts=['scripts/astroplant-kit'],
       packages=find_packages(),
-      include_package_data=True,
+      package_data={'astroplant_kit': ['proto/*',],},
       # Require for capnp, see https://github.com/capnproto/pycapnp/issues/72
       zip_safe=False,
       install_requires=requirements,
