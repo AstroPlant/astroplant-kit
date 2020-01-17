@@ -629,25 +629,39 @@ class LocalDataLogger(Actuator):
     A virtual peripheral device writing observations to internal storage.
     """
 
+    RUNNABLE = True
+
     def __init__(self, *args, configuration):
         super().__init__(*args)
         self.storage_path = configuration["storagePath"]
 
-        # Subscribe to all aggregate measurements.
-        self.manager.subscribe_predicate(
-            lambda m: m.aggregate_type is not None, self._store_measurement
-        )
+    async def run(self):
+        """
+        Listen to new measurements and store them.
+        """
+        async for m in self.manager.measurements_receiver():
+            if m.aggregate_type is not None:
+                self._store_measurement(m)
 
     def _store_measurement(self, measurement):
         # Import required modules.
         import csv
         import os
 
-        measurement_dict = measurement.__dict__
+        measurement_dict = {
+            "datetime_start": measurement.datetime_start,
+            "datetime_end": measurement.datetime_end,
+            "peripheral": measurement.peripheral.get_id(),
+            "peripheral_name": measurement.peripheral.name,
+            "aggregate_type": measurement.aggregate_type,
+            "physical_quantity": measurement.quantity_type.physical_quantity,
+            "physical_unit": measurement.quantity_type.physical_unit,
+            "value": measurement.value,
+        }
 
         file_name = "%s-%s.csv" % (
             measurement.end_datetime.strftime("%Y%m%d"),
-            measurement.physical_quantity,
+            measurement.quantity_type.physical_quantity,
         )
         path = os.path.join(self.storage_path, file_name)
 
