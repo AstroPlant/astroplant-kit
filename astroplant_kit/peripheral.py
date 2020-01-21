@@ -649,8 +649,8 @@ class LocalDataLogger(Actuator):
         import os
 
         measurement_dict = {
-            "datetime_start": measurement.datetime_start,
-            "datetime_end": measurement.datetime_end,
+            "start_datetime": measurement.start_datetime,
+            "end_datetime": measurement.end_datetime,
             "peripheral": measurement.peripheral.get_id(),
             "peripheral_name": measurement.peripheral.name,
             "aggregate_type": measurement.aggregate_type,
