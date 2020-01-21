@@ -32,7 +32,7 @@ def version():
 
 @cli.command()
 @click.argument('config-file', type=click.File('r'), default="./kit_config.toml")
-@click.option('--cache-dir', type=click.Path(exists=True, dir_okay=True, writable=True, readable=True, resolve_path=True), default="./cache")
+@click.option('--cache-dir', type=click.Path(exists=False, dir_okay=True, file_okay=False, writable=True, readable=True, resolve_path=True), default="./cache")
 def run(config_file, cache_dir):
     """
     Run the AstroPlant kit.
