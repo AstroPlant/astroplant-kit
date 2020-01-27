@@ -71,7 +71,7 @@ A peripheral display device also displays recent measurements.
 The `debug.peripheral_display` entry is used to configure the peripheral device for display.
 The `module_name` field refers to a module where the implementation of the peripheral display device can be found, and `class_name` is the specific class to instantiate.
 The module and class are then dynamically imported and instantiated.
-Additional parameters can be supplied on class instantiation by adding a `parameters` table.
+Additional configuration can be performed on class instantiation by adding a `configuration` table.
 
 The default `BlackHoleDisplay` ignores all log messages.
 For debugging purposes, `class_name` can be set to `DebugDisplay`, which will send all display messages to stdout.
@@ -88,11 +88,11 @@ level = "INFO"
 module_name = "astroplant_peripheral_device_library.lcd"
 class_name = "LCD"
 
-[debug.peripheral_display.parameters]
-i2c_address = "0x27"
+[debug.peripheral_display.configuration]
+i2cAddress = "0x27"
 ```
 
-Set `i2c_address` to the address used by the device.
+Set `i2cAddress` to the address used by the device.
 
 # Run the kit
 

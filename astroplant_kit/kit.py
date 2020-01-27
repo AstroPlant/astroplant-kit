@@ -55,9 +55,9 @@ class Kit(object):
             logger.info("Initialising peripheral debug display device.")
             peripheral_configuration = debug_configuration["peripheral_display"]
 
-            parameters = (
-                peripheral_configuration["parameters"]
-                if ("parameters" in peripheral_configuration)
+            configuration = (
+                peripheral_configuration["configuration"]
+                if ("configuration" in peripheral_configuration)
                 else {}
             )
 
@@ -66,7 +66,7 @@ class Kit(object):
                 peripheral_configuration["module_name"]
             ].__dict__[peripheral_configuration["class_name"]]
             peripheral_device = self.peripheral_manager.create_debug_display(
-                peripheral_class, parameters
+                peripheral_class, configuration
             )
             logger.info("Peripheral debug display device created.")
 
