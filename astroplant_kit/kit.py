@@ -19,6 +19,7 @@ import importlib
 import logging
 from astroplant_kit import peripheral
 from astroplant_kit.supervisor import Supervisor
+from astroplant_kit import errors
 from .api import Client, RpcError
 from .cache import Cache
 
@@ -197,6 +198,12 @@ class Kit(object):
                         f"Could not get configuration from cache, stoping. Original error: {e}"
                     )
                     return
+
+            if configuration is None:
+                logger.error(
+                    f"No configuration set. Exiting."
+                )
+                raise errors.NoConfigurationError()
 
             try:
                 quantity_types = await self._fetch_and_store_quantity_types()
