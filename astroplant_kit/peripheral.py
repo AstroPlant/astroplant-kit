@@ -86,7 +86,7 @@ class PeripheralManager(object):
             quantity_type,
             value,
             start_datetime=start_datetime,
-            end_datetime=end_datetime or datetime.datetime.utcnow(),
+            end_datetime=end_datetime or datetime.datetime.now(datetime.timezone.utc),
             aggregate_type=None,
         )
 
@@ -109,7 +109,7 @@ class PeripheralManager(object):
             quantity_type,
             value,
             start_datetime=start_datetime,
-            end_datetime=end_datetime or datetime.datetime.utcnow(),
+            end_datetime=end_datetime or datetime.datetime.now(datetime.timezone.utc),
             aggregate_type=aggregate_type,
         )
 
@@ -352,7 +352,7 @@ class Sensor(Peripheral):
         Repeatedly reduce multiple measurements made to a single measurement.
         """
         while True:
-            start_datetime = datetime.datetime.utcnow()
+            start_datetime = datetime.datetime.now(datetime.timezone.utc)
 
             await trio.sleep(self.aggregate_interval)
 
@@ -371,7 +371,7 @@ class Sensor(Peripheral):
             # Emty the list
             self.measurements = []
 
-            end_datetime = datetime.datetime.utcnow()
+            end_datetime = datetime.datetime.now(datetime.timezone.utc)
 
             # Produce list of reduced measurements
             try:
