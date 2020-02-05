@@ -94,9 +94,9 @@ class ServerRpc(object):
                     # Not timed out.
                     break
                 else:
-                    logger.warning("Dropping server RPC request %s: timed out.", id)
                     self._rpc_response_timeout.pop(0)
                     if id in self._rpc_response_queue:
+                        logger.warning("Dropping server RPC request %s: timed out.", id)
                         # Using with-block to explicitly close the channel.
                         async with self._rpc_response_queue[id]:
                             del self._rpc_response_queue[id]
