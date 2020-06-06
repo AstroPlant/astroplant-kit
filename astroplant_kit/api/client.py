@@ -178,7 +178,7 @@ class Client(object):
         raw_measurement_msg = astroplant_capnp.RawMeasurement.new_message(
             id=measurement.id.bytes,
             kitSerial="",  # Filled on the backend-side for security reasons
-            datetime=round(measurement.end_datetime.timestamp() * 1000),
+            datetime=round(measurement.datetime.timestamp() * 1000),
             peripheral=measurement.peripheral.get_id(),
             quantityType=measurement.quantity_type.id,
             value=measurement.value,
@@ -195,8 +195,13 @@ class Client(object):
         Publish an aggregate measurement.
         """
         logger.debug(
-            f"Sending aggregate measurement: {measurement.peripheral.name}: {measurement.aggregate_type} {measurement.quantity_type.physical_quantity} in {measurement.quantity_type.physical_unit_short}: {measurement.value} [{measurement.id}]"
+            f"Sending aggregate measurement: {measurement.peripheral.name}: {measurement.quantity_type.physical_quantity} in {measurement.quantity_type.physical_unit_short}: {measurement.values} [{measurement.id}]"
         )
+
+        values = []
+        for (aggregate, value) in measurement.values.items():
+            values.append({"type": aggregate, "value": value})
+            # values.append(astroplant_capnp.AggregateMeasurement.Value.new_message(
 
         aggregate_measurement_msg = astroplant_capnp.AggregateMeasurement.new_message(
             id=measurement.id.bytes,
@@ -205,8 +210,7 @@ class Client(object):
             datetimeEnd=round(measurement.end_datetime.timestamp() * 1000),
             peripheral=measurement.peripheral.get_id(),
             quantityType=measurement.quantity_type.id,
-            aggregateType=measurement.aggregate_type,
-            value=measurement.value,
+            values=values,
         )
 
         self._mqtt_client.publish(

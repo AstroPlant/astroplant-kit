@@ -2,7 +2,7 @@ import logging
 import abc
 import sys
 import collections
-import datetime
+import datetime as dt
 import uuid
 import trio
 import collections
@@ -69,13 +69,7 @@ class PeripheralManager(object):
         return None
 
     def create_raw_measurement(
-        self,
-        peripheral,
-        physical_quantity,
-        physical_unit,
-        value,
-        start_datetime=None,
-        end_datetime=None,
+        self, peripheral, physical_quantity, physical_unit, value, datetime=None,
     ):
         quantity_type = self._get_quantity_type(physical_quantity, physical_unit)
         if quantity_type == None:
@@ -85,9 +79,7 @@ class PeripheralManager(object):
             peripheral,
             quantity_type,
             value,
-            start_datetime=start_datetime,
-            end_datetime=end_datetime or datetime.datetime.now(datetime.timezone.utc),
-            aggregate_type=None,
+            datetime=datetime or dt.datetime.now(dt.timezone.utc),
         )
 
     def create_aggregate_measurement(
@@ -95,8 +87,7 @@ class PeripheralManager(object):
         peripheral,
         physical_quantity,
         physical_unit,
-        value,
-        aggregate_type,
+        values,
         start_datetime=None,
         end_datetime=None,
     ):
@@ -104,13 +95,12 @@ class PeripheralManager(object):
         if quantity_type == None:
             return None
 
-        return Measurement(
+        return AggregateMeasurement(
             peripheral,
             quantity_type,
-            value,
+            values,
             start_datetime=start_datetime,
-            end_datetime=end_datetime or datetime.datetime.now(datetime.timezone.utc),
-            aggregate_type=aggregate_type,
+            end_datetime=end_datetime or dt.datetime.now(dt.timezone.utc),
         )
 
     @property
@@ -228,6 +218,7 @@ class Peripheral(object):
         self.name = name
         self.manager = peripheral_device_manager
         self.logger = logger.getChild("peripheral").getChild(self.name)
+        self._publish_handle = lambda *args: None
 
     @abc.abstractmethod
     async def run(self):
@@ -286,28 +277,17 @@ class Sensor(Peripheral):
         ]
 
     def create_raw_measurement(
-        self,
-        physical_quantity,
-        physical_unit,
-        value,
-        start_datetime=None,
-        end_datetime=None,
+        self, physical_quantity, physical_unit, value, datetime=None,
     ):
         return self.manager.create_raw_measurement(
-            self,
-            physical_quantity,
-            physical_unit,
-            value,
-            start_datetime=start_datetime,
-            end_datetime=end_datetime,
+            self, physical_quantity, physical_unit, value, datetime=datetime,
         )
 
     def create_aggregate_measurement(
         self,
         physical_quantity,
         physical_unit,
-        value,
-        aggregate_type,
+        values,
         start_datetime=None,
         end_datetime=None,
     ):
@@ -315,8 +295,7 @@ class Sensor(Peripheral):
             self,
             physical_quantity,
             physical_unit,
-            value,
-            aggregate_type,
+            values,
             start_datetime=start_datetime,
             end_datetime=end_datetime,
         )
@@ -352,7 +331,7 @@ class Sensor(Peripheral):
         Repeatedly reduce multiple measurements made to a single measurement.
         """
         while True:
-            start_datetime = datetime.datetime.now(datetime.timezone.utc)
+            start_datetime = dt.datetime.now(dt.timezone.utc)
 
             await trio.sleep(self.aggregate_interval)
 
@@ -368,17 +347,16 @@ class Sensor(Peripheral):
                     )
                 ].append(measurement)
 
-            # Emty the list
+            # Empty the list
             self.measurements = []
 
-            end_datetime = datetime.datetime.now(datetime.timezone.utc)
+            end_datetime = dt.datetime.now(dt.timezone.utc)
 
             # Produce list of reduced measurements
             try:
                 reduced_measurements = [
-                    aggregate
+                    self.reduce(val, start_datetime, end_datetime)
                     for (_, val) in grouped_measurements.items()
-                    for aggregate in self.reduce(val, start_datetime, end_datetime)
                 ]
 
             except Exception as e:
@@ -409,19 +387,18 @@ class Sensor(Peripheral):
             return []
 
         values = list(map(lambda m: m.value, measurements))
+        aggregates = {
+            reducer["name"]: reducer["fn"](values) for reducer in self.reducers
+        }
 
-        return [
-            self.manager.create_aggregate_measurement(
-                measurements[0].peripheral,
-                measurements[0].quantity_type.physical_quantity,
-                measurements[0].quantity_type.physical_unit,
-                reducer["fn"](values),
-                reducer["name"],
-                start_datetime=start_datetime,
-                end_datetime=end_datetime,
-            )
-            for reducer in self.reducers
-        ]
+        return self.manager.create_aggregate_measurement(
+            measurements[0].peripheral,
+            measurements[0].quantity_type.physical_quantity,
+            measurements[0].quantity_type.physical_unit,
+            aggregates,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+        )
 
 
 class Actuator(Peripheral):
@@ -456,38 +433,52 @@ class QuantityType(object):
 class Measurement(object):
     """
     Measurement class.
-
-    Note that in general for non-aggregate measurements `start_datetime`
-    need not be defined.
     """
 
     def __init__(
-        self,
-        peripheral,
-        quantity_type,
-        value,
-        start_datetime=None,
-        end_datetime=None,
-        aggregate_type=None,
+        self, peripheral, quantity_type, value, datetime=None,
     ):
         self.id = uuid.uuid4()
         self.peripheral = peripheral
         self.quantity_type = quantity_type
         self.value = value
-        self.start_datetime = start_datetime
-        self.end_datetime = end_datetime
-        self.aggregate_type = aggregate_type
+        self.datetime = datetime
 
     def __str__(self):
-        return "%s-%s - %s %s %s: %s %s [%s]" % (
-            self.start_datetime,
-            self.end_datetime,
-            self.aggregate_type,
+        return "%s - %s %s: %s %s [%s]" % (
+            self.datetime,
             self.peripheral,
             self.quantity_type.physical_quantity,
             self.value,
             self.quantity_type.physical_unit,
             self.id,
+        )
+
+
+class AggregateMeasurement(object):
+    """
+    Aggregate measurement class.
+    """
+
+    def __init__(
+        self, peripheral, quantity_type, values, start_datetime=None, end_datetime=None,
+    ):
+        self.id = uuid.uuid4()
+        self.peripheral = peripheral
+        self.quantity_type = quantity_type
+        self.values = values
+        self.start_datetime = start_datetime
+        self.end_datetime = end_datetime
+
+    def __str__(self):
+        return "%s-%s - %s %s %s [%s]: %s" % (
+            self.start_datetime,
+            self.end_datetime,
+            self.peripheral,
+            self.quantity_type.physical_quantity,
+            self.quantity_type.physical_unit,
+            self.id,
+            self.values,
         )
 
 
@@ -513,7 +504,10 @@ class Display(Peripheral):
         Listen to new measurements and handle them.
         """
         async for m in self.manager.measurements_receiver():
-            self._measurements[(m.peripheral, m.quantity_type.physical_quantity)] = m
+            if isinstance(m, Measurement):
+                self._measurements[
+                    (m.peripheral, m.quantity_type.physical_quantity)
+                ] = m
 
     async def run(self):
         idx = 0
@@ -640,7 +634,7 @@ class LocalDataLogger(Actuator):
         Listen to new measurements and store them.
         """
         async for m in self.manager.measurements_receiver():
-            if m.aggregate_type is not None:
+            if isinstance(m, AggregateMeasurement):
                 self._store_measurement(m)
 
     def _store_measurement(self, measurement):
@@ -653,10 +647,9 @@ class LocalDataLogger(Actuator):
             "end_datetime": measurement.end_datetime,
             "peripheral": measurement.peripheral.get_id(),
             "peripheral_name": measurement.peripheral.name,
-            "aggregate_type": measurement.aggregate_type,
             "physical_quantity": measurement.quantity_type.physical_quantity,
             "physical_unit": measurement.quantity_type.physical_unit,
-            "value": measurement.value,
+            "values": measurement.values,
         }
 
         file_name = "%s-%s.csv" % (

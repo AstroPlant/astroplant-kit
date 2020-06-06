@@ -8,7 +8,7 @@ from typing import Dict, Any, List
 from collections import namedtuple
 from datetime import datetime, time
 
-from ..peripheral import PeripheralManager, Peripheral
+from ..peripheral import PeripheralManager, Peripheral, Measurement
 from .supervisor import Supervisor
 
 logger = logging.getLogger("astroplant_kit.supervisor")
@@ -130,7 +130,7 @@ class AstroplantSupervisorV1(Supervisor):
         measurements come in slowly.
         """
         async for measurement in self.peripheral_manager.measurements_receiver():
-            if measurement.aggregate_type is not None:
+            if not isinstance(measurement, Measurement):
                 continue
 
             for (peripheral_name, rules) in self._peripheral_rules.items():

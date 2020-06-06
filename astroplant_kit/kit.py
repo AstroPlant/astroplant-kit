@@ -151,7 +151,7 @@ class Kit(object):
 
         :param measurement: The measurement to publish.
         """
-        if measurement.aggregate_type is None:
+        if isinstance(measurement, peripheral.Measurement):
             self.api_client.publish_raw_measurement(measurement)
         else:
             self.api_client.publish_aggregate_measurement(measurement)

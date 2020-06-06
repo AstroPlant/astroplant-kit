@@ -16,8 +16,12 @@ struct AggregateMeasurement {
   datetimeEnd @3 :UInt64;
   peripheral @4 :Int32;
   quantityType @5 :Int32;
-  aggregateType @6 :Text;
-  value @7 :Float64;
+  values @6 :List(Value);
+
+  struct Value {
+      type @0 :Text;
+      value @1 :Float64;
+  }
 }
 
 struct RpcError {
