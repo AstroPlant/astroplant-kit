@@ -50,7 +50,7 @@ host = "mqtt.astroplant.io"
 port = 1883
 
 [message_broker.auth]
-serial = "k.********"
+serial = "k-********"
 secret = "********"
 
 [debug]
@@ -59,6 +59,16 @@ level = "INFO"
 [debug.peripheral_display]
 module_name = "astroplant_kit.peripheral"
 class_name = "BlackHoleDisplay"
+```
+
+If your kit should log in to the MQTT broker with a username different than its serial, you can specify the username for MQTT separately:
+
+```toml
+#...
+[message_broker.auth]
+username = "mqtt_username"
+serial = "k-********"
+secret = "********"
 ```
 
 ## Debug configuration
