@@ -22,6 +22,7 @@ class PeripheralManager(object):
 
     def __init__(self):
         self._peripherals: Dict[str, Peripheral] = {}
+        self._peripheral_control_locks: Dict[Peripheral, trio.Lock] = {}
         self._debug_display: Peripheral = None
         self.measurement_txs = []
         self.event_loop = None
@@ -111,6 +112,21 @@ class PeripheralManager(object):
         return filter(
             lambda peripheral: peripheral.RUNNABLE, self._peripherals.values()
         )
+
+    @property
+    def peripherals(self):
+        """
+        :return: An iterable of all peripherals.
+        """
+        return self._peripherals.values()
+
+    def control(self, peripheral):
+        """
+        :return: An async context manager for getting exclusive control access to a peripheral.
+        """
+        if peripheral not in self._peripheral_control_locks:
+            self._peripheral_control_locks[peripheral] = trio.Lock()
+        return PeripheralControl(peripheral, self._peripheral_control_locks[peripheral])
 
     def get_peripheral_by_name(self, name):
         """
@@ -407,6 +423,60 @@ class Actuator(Peripheral):
     """
 
     RUNNABLE = False
+
+
+class PeripheralControl(object):
+    """
+    A peripheral control object.
+    
+    Used to give exclusive control access over a peripheral device.
+
+    Can be used with the given methods, or as an async context manager. On lock
+    acquisition, returns a handle to an async function to send commands to the
+    peripheral device.
+    """
+
+    def __init__(self, peripheral: Peripheral, lock: trio.Lock):
+        self._peripheral = peripheral
+        self._lock = lock
+
+    async def __aenter__(self):
+        """
+        :return: A handle to an async function to send commands to the peripheral device.
+        """
+        await self._lock.acquire()
+        return self._do
+
+    async def __aexit__(self, _type, _value, _traceback):
+        self._lock.release()
+
+    async def acquire(self):
+        """
+        Acquire the lock, blocking if necessary.
+        :return: A handle to an async function to send commands to the peripheral device.
+        This handle should only be used for as long as the lock is held.
+        """
+        await self._lock.acquire()
+        return self._do
+
+    def acquire_nowait(self):
+        """
+        Attempt to acquire the underlying lock, without blocking.
+        :return: A handle to an async function to send commands to the peripheral device.
+        This handle should only be used for as long as the lock is held.
+        :raises: trio.WouldBlock if the lock is held.
+        """
+        self._lock.acquire_nowait()
+        return self._do
+
+    def release(self):
+        """
+        Release the underlying lock.
+        """
+        self._lock.release()
+
+    async def _do(self, command):
+        return await self._peripheral.do(command)
 
 
 class QuantityType(object):

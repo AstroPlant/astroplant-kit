@@ -4,6 +4,7 @@ use-cases.
 """
 
 import logging
+import trio
 from typing import Dict, Any, List
 from collections import namedtuple
 from datetime import datetime, time
@@ -142,8 +143,22 @@ class AstroplantSupervisorV1(Supervisor):
                     continue
 
                 actions = rules.get_actions(datetime.now().time(), measurement)
-                for action in actions:
+                control = self.peripheral_manager.control(peripheral)
+                try:
+                    do = control.acquire_nowait()
+                    try:
+                        for action in actions:
+                            logger.debug(
+                                "sending action to peripheral %s: %s",
+                                peripheral_name,
+                                action,
+                            )
+                            await do(action)
+                    finally:
+                        control.release()
+                except trio.WouldBlock:
+                    # TODO: perhaps retry action after some time.
                     logger.debug(
-                        "sending action to peripheral %s: %s", peripheral_name, action
+                        "tried to control peripheral %s but could not immediately acquire lock",
+                        peripheral_name,
                     )
-                    await peripheral.do(action)
