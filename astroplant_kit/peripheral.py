@@ -12,6 +12,16 @@ from typing import Dict
 logger = logging.getLogger("astroplant_kit.peripheral")
 
 
+class PeripheralCommandResult(
+    collections.namedtuple(
+        "PeripheralCommandResult", ["media_type", "data", "metadata"]
+    )
+):
+    media_type: str
+    data: bytes
+    metadata: Dict
+
+
 class PeripheralManager(object):
     """
     A peripheral device manager; this manager keeps track of all peripherals,
@@ -244,9 +254,11 @@ class Peripheral(object):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    async def do(self, command):
+    async def do(self, command) -> PeripheralCommandResult:
         """
         Asynchronously perform a command on the device.
+
+        :return: Optionally return a dictionary with an explicit media type, data, and metadata.
         """
         raise NotImplementedError()
 
@@ -475,7 +487,7 @@ class PeripheralControl(object):
         """
         self._lock.release()
 
-    async def _do(self, command):
+    async def _do(self, command) -> PeripheralCommandResult:
         return await self._peripheral.do(command)
 
 

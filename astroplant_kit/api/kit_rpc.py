@@ -1,7 +1,9 @@
 import logging
 import abc
 import asyncio
+import json
 from .schema import astroplant_capnp
+from ..peripheral import PeripheralCommandResult
 
 
 logger = logging.getLogger("astroplant_kit.api")
@@ -13,11 +15,21 @@ class KitRpcHandler(abc.ABC):
     """
 
     @abc.abstractmethod
-    async def version() -> str:
+    async def version(self) -> str:
         pass
 
     @abc.abstractmethod
-    async def uptime() -> int:
+    async def uptime(self) -> int:
+        pass
+
+    @abc.abstractmethod
+    async def peripheral_command(
+        self, peripheral: str, command: str
+    ) -> PeripheralCommandResult:
+        pass
+
+    @abc.abstractmethod
+    async def peripheral_command_lock(self, peripheral: str) -> bool:
         pass
 
 
@@ -45,10 +57,37 @@ class KitRpc(object):
         response = astroplant_capnp.KitRpcResponse.new_message(id=request.id)
 
         which = request.which()
+        print(which)
         if which == "version":
             response.version = await rpc.version()
         elif which == "uptime":
             response.uptime = await rpc.uptime()
+        elif which == "peripheralCommand":
+            try:
+                result = await rpc.peripheral_command(
+                    request.peripheralCommand.peripheral,
+                    json.loads(request.peripheralCommand.command),
+                )
+                if result is None:
+                    peripheral_command_response = astroplant_capnp.KitRpcResponse.PeripheralCommand.new_message(
+                        mediaType="text/plain",
+                        data=b"ok",
+                        metadata=json.dumps(None),
+                    )
+                else:
+                    peripheral_command_response = astroplant_capnp.KitRpcResponse.PeripheralCommand.new_message(
+                        mediaType=result.media_type,
+                        data=result.data,
+                        metadata=json.dumps(result.metadata),
+                    )
+                response.peripheralCommand = peripheral_command_response
+            except:
+                error = astroplant_capnp.RpcError.new_message(other=None)
+                response.error = error
+        elif which == "peripheralCommandLock":
+            response.peripheralCommandLock = await rpc.peripheral_command_lock(
+                request.peripheralCommandLock.peripheral
+            )
         else:
             logger.warn(f"Received unknown kit RPC request: {which}")
             error = astroplant_capnp.RpcError.new_message(methodNotFound=None)
