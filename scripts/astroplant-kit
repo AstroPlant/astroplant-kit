@@ -74,5 +74,5 @@ def run(config_file, cache_dir):
 
     trio.run(run)
 
-
-cli()
+if __name__ == "__main__":
+    cli()
