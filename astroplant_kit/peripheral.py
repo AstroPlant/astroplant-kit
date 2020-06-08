@@ -32,7 +32,7 @@ class PeripheralManager(object):
 
     def __init__(self):
         self._peripherals: Dict[str, Peripheral] = {}
-        self._peripheral_control_locks: Dict[Peripheral, trio.Lock] = {}
+        self._peripheral_control_locks: Dict[Peripheral, PeripheralControl] = {}
         self._debug_display: Peripheral = None
         self.measurement_txs = []
         self.event_loop = None
@@ -135,8 +135,10 @@ class PeripheralManager(object):
         :return: An async context manager for getting exclusive control access to a peripheral.
         """
         if peripheral not in self._peripheral_control_locks:
-            self._peripheral_control_locks[peripheral] = trio.Lock()
-        return PeripheralControl(peripheral, self._peripheral_control_locks[peripheral])
+            self._peripheral_control_locks[peripheral] = PeripheralControl(
+                peripheral, trio.Lock()
+            )
+        return self._peripheral_control_locks[peripheral]
 
     def get_peripheral_by_name(self, name):
         """
@@ -446,21 +448,43 @@ class PeripheralControl(object):
     Can be used with the given methods, or as an async context manager. On lock
     acquisition, returns a handle to an async function to send commands to the
     peripheral device.
+
+    self.reset_on_exit can be set by the task currently owning the control lock.
+    Causes the context manager to resend the last command received prior to lock
+    acquisition.
     """
 
     def __init__(self, peripheral: Peripheral, lock: trio.Lock):
         self._peripheral = peripheral
         self._lock = lock
+        self._previous_command = None
+        self._reset_command = None
+        self._reset_on_exit = False
+
+    @property
+    def reset_on_exit(self):
+        return self._reset_on_exit
+
+    @reset_on_exit.setter
+    def reset_on_exit(self, reset_on_exit):
+        owner = self._lock.statistics().owner
+        if owner is None or trio.hazmat.current_task() is not owner:
+            raise Exception(
+                "Calling task is not the lock owner. It must be the lock owner to change reset-on-exit behaviour."
+            )
+        self._reset_on_exit = reset_on_exit
 
     async def __aenter__(self):
         """
         :return: A handle to an async function to send commands to the peripheral device.
         """
-        await self._lock.acquire()
-        return self._do
+        return await self.acquire()
 
     async def __aexit__(self, _type, _value, _traceback):
-        self._lock.release()
+        if self._reset_on_exit:
+            await self.reset_and_release()
+        else:
+            self.release()
 
     async def acquire(self):
         """
@@ -469,6 +493,7 @@ class PeripheralControl(object):
         This handle should only be used for as long as the lock is held.
         """
         await self._lock.acquire()
+        self._reset_command = self._previous_command
         return self._do
 
     def acquire_nowait(self):
@@ -479,6 +504,7 @@ class PeripheralControl(object):
         :raises: trio.WouldBlock if the lock is held.
         """
         self._lock.acquire_nowait()
+        self._reset_command = self._previous_command
         return self._do
 
     def release(self):
@@ -486,8 +512,22 @@ class PeripheralControl(object):
         Release the underlying lock.
         """
         self._lock.release()
+        self._reset_on_exit = False
+
+    async def reset_and_release(self):
+        """
+        Reset to the last command received prior to lock acquisition,
+        then release the underlying lock.
+        """
+        try:
+            if self._reset_command is not None:
+                await self._do(self._reset_command)
+                self._previous_command = self._reset_command
+        finally:
+            self.release()
 
     async def _do(self, command) -> PeripheralCommandResult:
+        self._previous_command = command
         return await self._peripheral.do(command)
 
 
