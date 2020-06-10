@@ -23,6 +23,8 @@ from astroplant_kit import errors
 from .api import Client, RpcError
 from .cache import Cache
 
+from typing import Any, Optional, Dict
+
 logger = logging.getLogger("astroplant_kit.kit")
 
 
@@ -31,8 +33,8 @@ class Kit(object):
         self.halt = False
         self.startup_time = datetime.datetime.now()
 
-        self._modules = {}
-        self._supervisor: Supervisor = None
+        self._modules: Dict[str, Any]  = {}
+        self._supervisor: Optional[Supervisor] = None
         self.peripheral_manager = peripheral.PeripheralManager()
         self.api_client = api_client
         self.cache = cache

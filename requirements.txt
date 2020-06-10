@@ -3,3 +3,4 @@ paho-mqtt~=1.4.0
 toml~=0.10.0
 pycapnp~=0.6.4
 trio~=0.13.0
+trio-typing~=0.3

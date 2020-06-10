@@ -7,7 +7,9 @@ import uuid
 import trio
 import collections
 
-from typing import Dict
+from typing import Any, Optional, Union, Iterable, Dict, List, Callable, Awaitable
+
+RawOrAggregateMeasurement = Union[Measurement, AggregateMeasurement]
 
 logger = logging.getLogger("astroplant_kit.peripheral")
 
@@ -34,15 +36,19 @@ class PeripheralManager(object):
         self._peripherals: Dict[str, Peripheral] = {}
         self._peripheral_control_locks: Dict[Peripheral, PeripheralControl] = {}
         self._debug_display: Peripheral = None
-        self.measurement_txs = []
+        self._measurement_txs: List[
+            trio.MemorySendChannel[RawOrAggregateMeasurement]
+        ] = []
         self.event_loop = None
-        self.quantity_types = []
+        self.quantity_types: List[QuantityType] = []
 
-        (measurement_tx, measurement_rx) = trio.open_memory_channel(64)
+        (measurement_tx, measurement_rx) = trio.open_memory_channel[
+            RawOrAggregateMeasurement
+        ](64)
         self._measurement_tx = measurement_tx
         self._measurement_rx = measurement_rx
 
-    def set_quantity_types(self, quantity_types):
+    def set_quantity_types(self, quantity_types: Iterable[Dict[str, Any]]):
         """
         Set the quantity types known to the server.
         """
@@ -58,19 +64,23 @@ class PeripheralManager(object):
             )
         )
 
-    def measurements_receiver(self, buffer=10) -> trio.MemoryReceiveChannel:
+    def measurements_receiver(
+        self, buffer: int = 10
+    ) -> trio.MemoryReceiveChannel[RawOrAggregateMeasurement]:
         """
         Create and get a measurement receiver channel.
 
         If the receiver does not keep up with the messages, the channel will
         be dropped.
         """
-        tx, rx = trio.open_memory_channel(buffer)
-        self.measurement_txs.append(tx)
+        tx, rx = trio.open_memory_channel[RawOrAggregateMeasurement](buffer)
+        self._measurement_txs.append(tx)
 
         return rx
 
-    def _get_quantity_type(self, physical_quantity, physical_unit):
+    def _get_quantity_type(
+        self, physical_quantity: str, physical_unit: str
+    ) -> Optional[QuantityType]:
         for qt in self.quantity_types:
             if (
                 qt.physical_quantity == physical_quantity
@@ -80,10 +90,15 @@ class PeripheralManager(object):
         return None
 
     def create_raw_measurement(
-        self, peripheral, physical_quantity, physical_unit, value, datetime=None,
-    ):
+        self,
+        peripheral: Peripheral,
+        physical_quantity: str,
+        physical_unit: str,
+        value: float,
+        datetime: Optional[dt.datetime] = None,
+    ) -> Optional[Measurement]:
         quantity_type = self._get_quantity_type(physical_quantity, physical_unit)
-        if quantity_type == None:
+        if quantity_type is None:
             return None
 
         return Measurement(
@@ -95,15 +110,15 @@ class PeripheralManager(object):
 
     def create_aggregate_measurement(
         self,
-        peripheral,
-        physical_quantity,
-        physical_unit,
-        values,
-        start_datetime=None,
-        end_datetime=None,
-    ):
+        peripheral: Peripheral,
+        physical_quantity: str,
+        physical_unit: str,
+        values: Dict[str, float],
+        start_datetime: dt.datetime,
+        end_datetime: Optional[dt.datetime] = None,
+    ) -> Optional[AggregateMeasurement]:
         quantity_type = self._get_quantity_type(physical_quantity, physical_unit)
-        if quantity_type == None:
+        if quantity_type is None:
             return None
 
         return AggregateMeasurement(
@@ -115,7 +130,7 @@ class PeripheralManager(object):
         )
 
     @property
-    def runnable_peripherals(self):
+    def runnable_peripherals(self) -> Iterable[Peripheral]:
         """
         :return: An iterable of all runnable peripherals.
         """
@@ -124,13 +139,13 @@ class PeripheralManager(object):
         )
 
     @property
-    def peripherals(self):
+    def peripherals(self) -> Iterable[Peripheral]:
         """
         :return: An iterable of all peripherals.
         """
         return self._peripherals.values()
 
-    def control(self, peripheral):
+    def control(self, peripheral: Peripheral) -> PeripheralControl:
         """
         :return: An async context manager for getting exclusive control access to a peripheral.
         """
@@ -140,7 +155,7 @@ class PeripheralManager(object):
             )
         return self._peripheral_control_locks[peripheral]
 
-    def get_peripheral_by_name(self, name):
+    def get_peripheral_by_name(self, name: str) -> Optional[Peripheral]:
         """
         :param name: The name of the peripheral to get.
         :return: Get the peripheral with the given name, or None if no such
@@ -169,24 +184,35 @@ class PeripheralManager(object):
             async for measurement in self._measurement_rx:
                 await self._broadcast(measurement)
 
-    async def _publish_handle(self, measurement):
+    async def _publish_handle(self, measurement: RawOrAggregateMeasurement):
         """
-        Publish a measurement.
+        Handle to pass to peripherals for publishing measurements.
 
         :param measurement: The measurement to publish.
         """
         await self._measurement_tx.send(measurement)
 
-    async def _broadcast(self, measurement):
-        for i in reversed(range(len(self.measurement_txs))):
-            tx = self.measurement_txs[i]
+    async def _broadcast(self, measurement: RawOrAggregateMeasurement):
+        """
+        Broadcast measurement to listener channels.
+
+        :param measurement: The measurement to broadcast.
+        """
+        for i in reversed(range(len(self._measurement_txs))):
+            tx = self._measurement_txs[i]
             try:
                 tx.send_nowait(measurement)
             except (trio.WouldBlock, trio.EndOfChannel):
                 await tx.aclose()
-                del self.measurement_txs[i]
+                del self._measurement_txs[i]
 
-    def create_peripheral(self, peripheral_class, id, name, configuration):
+    def create_peripheral(
+        self,
+        peripheral_class: Callable[..., Peripheral],
+        id: int,
+        name: str,
+        configuration: Any,
+    ) -> Peripheral:
         """
         Create and add a peripheral by its class name.
 
@@ -208,7 +234,9 @@ class PeripheralManager(object):
 
         return peripheral
 
-    def create_debug_display(self, peripheral_class, configuration):
+    def create_debug_display(
+        self, peripheral_class: Callable[..., Display], configuration: Any
+    ) -> Display:
         """
         Create a peripheral used for displaying debug messages.
 
@@ -230,7 +258,7 @@ class PeripheralManager(object):
         return peripheral
 
 
-class Peripheral(object):
+class Peripheral:
     """
     Abstract peripheral device base class.
     """
@@ -241,12 +269,14 @@ class Peripheral(object):
     #: Boolean indicating whether the peripheral can accept commands.
     COMMANDS = False
 
-    def __init__(self, id, name, peripheral_device_manager):
+    def __init__(
+        self, id: int, name: str, peripheral_device_manager: PeripheralManager
+    ):
         self.id = id
         self.name = name
         self.manager = peripheral_device_manager
         self.logger = logger.getChild("peripheral").getChild(self.name)
-        self._publish_handle = lambda *args: None
+        self._publish_handle: Optional[Callable[[RawOrAggregateMeasurement], Awaitable[None]]] = None
 
     @abc.abstractmethod
     async def run(self):
@@ -256,7 +286,7 @@ class Peripheral(object):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    async def do(self, command) -> PeripheralCommandResult:
+    async def do(self, command: Any) -> PeripheralCommandResult:
         """
         Asynchronously perform a command on the device.
 
@@ -264,13 +294,13 @@ class Peripheral(object):
         """
         raise NotImplementedError()
 
-    def get_id(self):
+    def get_id(self) -> int:
         return self.id
 
-    def get_name(self):
+    def get_name(self) -> str:
         return self.name
 
-    def _set_publish_handle(self, publish_handle):
+    def _set_publish_handle(self, publish_handle: Callable):
         """
         Set the handle this device's measurements should be published to.
         """
@@ -307,26 +337,30 @@ class Sensor(Peripheral):
         ]
 
     def create_raw_measurement(
-        self, physical_quantity, physical_unit, value, datetime=None,
-    ):
+        self,
+        physical_quantity: str,
+        physical_unit: str,
+        value: float,
+        datetime: Optional[dt.datetime] = None,
+    ) -> Optional[Measurement]:
         return self.manager.create_raw_measurement(
             self, physical_quantity, physical_unit, value, datetime=datetime,
         )
 
     def create_aggregate_measurement(
         self,
-        physical_quantity,
-        physical_unit,
-        values,
-        start_datetime=None,
-        end_datetime=None,
-    ):
+        physical_quantity: str,
+        physical_unit: str,
+        values: Dict[str, float],
+        start_datetime: dt.datetime,
+        end_datetime: Optional[dt.datetime] = None,
+    ) -> Optional[AggregateMeasurement]:
         return self.manager.create_aggregate_measurement(
             self,
             physical_quantity,
             physical_unit,
             values,
-            start_datetime=start_datetime,
+            start_datetime,
             end_datetime=end_datetime,
         )
 
@@ -398,13 +432,21 @@ class Sensor(Peripheral):
                 await self._publish_measurement(reduced_measurement)
 
     @abc.abstractmethod
-    async def measure(self):
+    async def measure(self) -> Union[Measurement, Iterable[Measurement]]:
         raise NotImplementedError()
 
-    async def _publish_measurement(self, measurement):
+    async def _publish_measurement(self, measurement: RawOrAggregateMeasurement):
+        if self._publish_handle is None:
+            raise Exception("Publish handle not set.")
+
         await self._publish_handle(measurement)
 
-    def reduce(self, measurements, start_datetime, end_datetime):
+    def reduce(
+        self,
+        measurements: List[Measurement],
+        start_datetime: dt.datetime,
+        end_datetime: dt.datetime,
+    ) -> Optional[AggregateMeasurement]:
         """
         Reduce a list of measurements to aggregates.
 
@@ -414,7 +456,7 @@ class Sensor(Peripheral):
         :return: A list of aggregates.
         """
         if not measurements:
-            return []
+            return None
 
         values = list(map(lambda m: m.value, measurements))
         aggregates = {
@@ -486,7 +528,7 @@ class PeripheralControl(object):
         else:
             self.release()
 
-    async def acquire(self):
+    async def acquire(self) -> Callable[[Any], Awaitable[PeripheralCommandResult]]:
         """
         Acquire the lock, blocking if necessary.
         :return: A handle to an async function to send commands to the peripheral device.
@@ -496,7 +538,7 @@ class PeripheralControl(object):
         self._reset_command = self._previous_command
         return self._do
 
-    def acquire_nowait(self):
+    def acquire_nowait(self) -> Callable[[Any], Awaitable[PeripheralCommandResult]]:
         """
         Attempt to acquire the underlying lock, without blocking.
         :return: A handle to an async function to send commands to the peripheral device.
@@ -526,7 +568,7 @@ class PeripheralControl(object):
         finally:
             self.release()
 
-    async def _do(self, command) -> PeripheralCommandResult:
+    async def _do(self, command: Any) -> PeripheralCommandResult:
         self._previous_command = command
         return await self._peripheral.do(command)
 
@@ -538,14 +580,20 @@ class QuantityType(object):
     The quantity type id is given by the server.
     """
 
-    def __init__(self, id, physical_quantity, physical_unit, physical_unit_symbol=None):
+    def __init__(
+        self,
+        id: int,
+        physical_quantity: str,
+        physical_unit: str,
+        physical_unit_symbol: str = None,
+    ):
         self.id = id
         self.physical_quantity = physical_quantity
         self.physical_unit = physical_unit
         self.physical_unit_symbol = physical_unit_symbol
 
     @property
-    def physical_unit_short(self):
+    def physical_unit_short(self) -> str:
         if self.physical_unit_symbol:
             return self.physical_unit_symbol
         else:
@@ -558,7 +606,11 @@ class Measurement(object):
     """
 
     def __init__(
-        self, peripheral, quantity_type, value, datetime=None,
+        self,
+        peripheral: Peripheral,
+        quantity_type: QuantityType,
+        value: float,
+        datetime: dt.datetime,
     ):
         self.id = uuid.uuid4()
         self.peripheral = peripheral
@@ -583,7 +635,12 @@ class AggregateMeasurement(object):
     """
 
     def __init__(
-        self, peripheral, quantity_type, values, start_datetime=None, end_datetime=None,
+        self,
+        peripheral: Peripheral,
+        quantity_type: QuantityType,
+        values: Dict[str, float],
+        start_datetime: dt.datetime,
+        end_datetime: dt.datetime,
     ):
         self.id = uuid.uuid4()
         self.peripheral = peripheral
@@ -672,7 +729,7 @@ class Display(Peripheral):
         async with self._condition:
             self._condition.notify()
 
-    def add_log_message(self, msg):
+    def add_log_message(self, msg: str):
         """
         Add a log message to be displayed on the device.
 
@@ -693,7 +750,7 @@ class Display(Peripheral):
             thread.start()
 
     @abc.abstractmethod
-    def display(self, str):
+    def display(self, message: str):
         """
         Display a string on the device.
 
@@ -707,11 +764,11 @@ class DebugDisplay(Display):
     A trivial peripheral display device implementation printing messages to the terminal.
     """
 
-    def __init__(self, *args, configuration):
+    def __init__(self, *args, configuration: Any):
         super().__init__(*args)
 
-    def display(self, str):
-        print("Debug Display: %s" % str)
+    def display(self, message: str):
+        print("Debug Display: %s" % message)
 
 
 class BlackHoleDisplay(Display):
@@ -719,7 +776,7 @@ class BlackHoleDisplay(Display):
     A trivial peripheral display device implementation ignoring all display messages.
     """
 
-    def display(self, str):
+    def display(self, message: str):
         pass
 
 
@@ -728,11 +785,11 @@ class DisplayDeviceStream(object):
     A stream class to be used for loggers logging to peripheral display devices.
     """
 
-    def __init__(self, peripheral_display_device):
+    def __init__(self, peripheral_display_device: Display):
         self.peripheral_display_device = peripheral_display_device
         self.str = ""
 
-    def write(self, str):
+    def write(self, str: str):
         self.str += str
 
     def flush(self):
@@ -747,7 +804,7 @@ class LocalDataLogger(Actuator):
 
     RUNNABLE = True
 
-    def __init__(self, *args, configuration):
+    def __init__(self, *args, configuration: Any):
         super().__init__(*args)
         self.storage_path = configuration["storagePath"]
 
@@ -759,7 +816,7 @@ class LocalDataLogger(Actuator):
             if isinstance(m, AggregateMeasurement):
                 self._store_measurement(m)
 
-    def _store_measurement(self, measurement):
+    def _store_measurement(self, measurement: AggregateMeasurement):
         # Import required modules.
         import csv
         import os

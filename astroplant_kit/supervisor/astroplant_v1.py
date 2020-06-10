@@ -119,7 +119,7 @@ class AstroplantSupervisorV1(Supervisor):
 
     def __init__(self, peripheral_manager: PeripheralManager, rules: Dict[str, Any]):
         super().__init__(peripheral_manager, rules)
-        self._peripheral_rules: Dict[str, self.PeripheralRules] = {}
+        self._peripheral_rules: Dict[str, AstroplantSupervisorV1.PeripheralRules] = {}
         for (peripheral_name, peripheral_rules) in rules.items():
             self._peripheral_rules[peripheral_name] = self.PeripheralRules(
                 peripheral_rules
