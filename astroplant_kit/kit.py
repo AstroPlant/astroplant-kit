@@ -39,9 +39,6 @@ class Kit(object):
         self.api_client = api_client
         self.cache = cache
 
-        self.messages = []
-        self.messages_condition = threading.Condition()
-
         self.initialise_debug(debug_configuration)
 
     def initialise_debug(self, debug_configuration):

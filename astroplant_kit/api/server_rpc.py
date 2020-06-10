@@ -72,10 +72,6 @@ class ServerRpc(object):
 
         response_sender, response_receiver = trio.open_memory_channel(0)
 
-        value_callback = lambda value: loop.call_soon_threadsafe(fut.set_result, value)
-        exception_callback = lambda value: loop.call_soon_threadsafe(
-            fut.set_exception, value
-        )
         self._rpc_response_queue[request_id] = response_sender
         self._rpc_response_timeout.append((request_id, datetime.datetime.now()))
 
