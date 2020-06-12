@@ -3,13 +3,13 @@ Specifies the abstract kit supervisor, a base class to be extended, intended to
 link sensors and actuators together.
 """
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 import abc
 from ..peripheral import PeripheralManager
 
 
 class Supervisor:
-    def __init__(self, peripheral_manager: PeripheralManager, rules: Dict[str, Any]):
+    def __init__(self, peripheral_manager: PeripheralManager, rules: Any):
         self.peripheral_manager = peripheral_manager
         self.rules = rules
 
