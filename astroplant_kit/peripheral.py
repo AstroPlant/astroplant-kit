@@ -9,7 +9,6 @@ import collections
 
 from typing import Any, Optional, Union, Iterable, Dict, List, Callable, Awaitable
 
-RawOrAggregateMeasurement = Union[Measurement, AggregateMeasurement]
 
 logger = logging.getLogger("astroplant_kit.peripheral")
 
@@ -24,238 +23,68 @@ class PeripheralCommandResult(
     metadata: Dict
 
 
-class PeripheralManager(object):
+class Measurement(object):
     """
-    A peripheral device manager; this manager keeps track of all peripherals,
-    provides the ability to subscribe to peripheral device measurements,
-    and provides the ability to run all runnable peripheral devices (such as
-    sensors).
+    Measurement class.
     """
 
-    def __init__(self):
-        self._peripherals: Dict[str, Peripheral] = {}
-        self._peripheral_control_locks: Dict[Peripheral, PeripheralControl] = {}
-        self._debug_display: Peripheral = None
-        self._measurement_txs: List[
-            trio.MemorySendChannel[RawOrAggregateMeasurement]
-        ] = []
-        self.event_loop = None
-        self.quantity_types: List[QuantityType] = []
-
-        (measurement_tx, measurement_rx) = trio.open_memory_channel[
-            RawOrAggregateMeasurement
-        ](64)
-        self._measurement_tx = measurement_tx
-        self._measurement_rx = measurement_rx
-
-    def set_quantity_types(self, quantity_types: Iterable[Dict[str, Any]]):
-        """
-        Set the quantity types known to the server.
-        """
-        self.quantity_types = list(
-            map(
-                lambda qt: QuantityType(
-                    qt["id"],
-                    qt["physicalQuantity"],
-                    qt["physicalUnit"],
-                    physical_unit_symbol=qt["physicalUnitSymbol"] or None,
-                ),
-                quantity_types,
-            )
-        )
-
-    def measurements_receiver(
-        self, buffer: int = 10
-    ) -> trio.MemoryReceiveChannel[RawOrAggregateMeasurement]:
-        """
-        Create and get a measurement receiver channel.
-
-        If the receiver does not keep up with the messages, the channel will
-        be dropped.
-        """
-        tx, rx = trio.open_memory_channel[RawOrAggregateMeasurement](buffer)
-        self._measurement_txs.append(tx)
-
-        return rx
-
-    def _get_quantity_type(
-        self, physical_quantity: str, physical_unit: str
-    ) -> Optional[QuantityType]:
-        for qt in self.quantity_types:
-            if (
-                qt.physical_quantity == physical_quantity
-                and qt.physical_unit == physical_unit
-            ):
-                return qt
-        return None
-
-    def create_raw_measurement(
+    def __init__(
         self,
-        peripheral: Peripheral,
-        physical_quantity: str,
-        physical_unit: str,
+        peripheral: "Peripheral",
+        quantity_type: "QuantityType",
         value: float,
-        datetime: Optional[dt.datetime] = None,
-    ) -> Optional[Measurement]:
-        quantity_type = self._get_quantity_type(physical_quantity, physical_unit)
-        if quantity_type is None:
-            return None
+        datetime: dt.datetime,
+    ):
+        self.id = uuid.uuid4()
+        self.peripheral = peripheral
+        self.quantity_type = quantity_type
+        self.value = value
+        self.datetime = datetime
 
-        return Measurement(
-            peripheral,
-            quantity_type,
-            value,
-            datetime=datetime or dt.datetime.now(dt.timezone.utc),
+    def __str__(self):
+        return "%s - %s %s: %s %s [%s]" % (
+            self.datetime,
+            self.peripheral,
+            self.quantity_type.physical_quantity,
+            self.value,
+            self.quantity_type.physical_unit,
+            self.id,
         )
 
-    def create_aggregate_measurement(
+
+class AggregateMeasurement(object):
+    """
+    Aggregate measurement class.
+    """
+
+    def __init__(
         self,
-        peripheral: Peripheral,
-        physical_quantity: str,
-        physical_unit: str,
+        peripheral: "Peripheral",
+        quantity_type: "QuantityType",
         values: Dict[str, float],
         start_datetime: dt.datetime,
-        end_datetime: Optional[dt.datetime] = None,
-    ) -> Optional[AggregateMeasurement]:
-        quantity_type = self._get_quantity_type(physical_quantity, physical_unit)
-        if quantity_type is None:
-            return None
+        end_datetime: dt.datetime,
+    ):
+        self.id = uuid.uuid4()
+        self.peripheral = peripheral
+        self.quantity_type = quantity_type
+        self.values = values
+        self.start_datetime = start_datetime
+        self.end_datetime = end_datetime
 
-        return AggregateMeasurement(
-            peripheral,
-            quantity_type,
-            values,
-            start_datetime=start_datetime,
-            end_datetime=end_datetime or dt.datetime.now(dt.timezone.utc),
+    def __str__(self):
+        return "%s-%s - %s %s %s [%s]: %s" % (
+            self.start_datetime,
+            self.end_datetime,
+            self.peripheral,
+            self.quantity_type.physical_quantity,
+            self.quantity_type.physical_unit,
+            self.id,
+            self.values,
         )
 
-    @property
-    def runnable_peripherals(self) -> Iterable[Peripheral]:
-        """
-        :return: An iterable of all runnable peripherals.
-        """
-        return filter(
-            lambda peripheral: peripheral.RUNNABLE, self._peripherals.values()
-        )
 
-    @property
-    def peripherals(self) -> Iterable[Peripheral]:
-        """
-        :return: An iterable of all peripherals.
-        """
-        return self._peripherals.values()
-
-    def control(self, peripheral: Peripheral) -> PeripheralControl:
-        """
-        :return: An async context manager for getting exclusive control access to a peripheral.
-        """
-        if peripheral not in self._peripheral_control_locks:
-            self._peripheral_control_locks[peripheral] = PeripheralControl(
-                peripheral, trio.Lock()
-            )
-        return self._peripheral_control_locks[peripheral]
-
-    def get_peripheral_by_name(self, name: str) -> Optional[Peripheral]:
-        """
-        :param name: The name of the peripheral to get.
-        :return: Get the peripheral with the given name, or None if no such
-        peripheral exists.
-        """
-        if name in self._peripherals:
-            return self._peripherals[name]
-        else:
-            return None
-
-    async def run_debug_display(self):
-        """
-        Run the debug display device.
-        """
-        if self._debug_display:
-            await self._debug_display.run()
-
-    async def run(self):
-        """
-        Run all runnable peripherals and broadcast measurements.
-        """
-        async with trio.open_nursery() as nursery:
-            for peripheral in self.runnable_peripherals:
-                nursery.start_soon(peripheral.run)
-
-            async for measurement in self._measurement_rx:
-                await self._broadcast(measurement)
-
-    async def _publish_handle(self, measurement: RawOrAggregateMeasurement):
-        """
-        Handle to pass to peripherals for publishing measurements.
-
-        :param measurement: The measurement to publish.
-        """
-        await self._measurement_tx.send(measurement)
-
-    async def _broadcast(self, measurement: RawOrAggregateMeasurement):
-        """
-        Broadcast measurement to listener channels.
-
-        :param measurement: The measurement to broadcast.
-        """
-        for i in reversed(range(len(self._measurement_txs))):
-            tx = self._measurement_txs[i]
-            try:
-                tx.send_nowait(measurement)
-            except (trio.WouldBlock, trio.EndOfChannel):
-                await tx.aclose()
-                del self._measurement_txs[i]
-
-    def create_peripheral(
-        self,
-        peripheral_class: Callable[..., Peripheral],
-        id: int,
-        name: str,
-        configuration: Any,
-    ) -> Peripheral:
-        """
-        Create and add a peripheral by its class name.
-
-        :param peripheral_class: The class of the peripheral to add.
-        :param id: The id of the specific peripheral to add.
-        :param name: The name of the peripheral.
-        :param configuration: The instantiation paramaters (configuration) of the peripheral.
-        :return: The created peripheral.
-        """
-        logger.debug("creating peripheral %s", name)
-
-        # Instantiate peripheral
-        peripheral = peripheral_class(id, name, self, configuration=configuration)
-
-        # Set message publication handle
-        peripheral._set_publish_handle(self._publish_handle)
-
-        self._peripherals[name] = peripheral
-
-        return peripheral
-
-    def create_debug_display(
-        self, peripheral_class: Callable[..., Display], configuration: Any
-    ) -> Display:
-        """
-        Create a peripheral used for displaying debug messages.
-
-        :param peripheral_class: The class of the peripheral to add.
-        :param configuration: The instantiation parameters (configuration) of the peripheral.
-        """
-        logger.debug("creating debug display peripheral")
-
-        # Instantiate peripheral
-        peripheral = peripheral_class(
-            -1, "debug-display-device", self, configuration=configuration
-        )
-
-        # Set message publication handle
-        peripheral._set_publish_handle(self._publish_handle)
-
-        self._debug_display = peripheral
-
-        return peripheral
+RawOrAggregateMeasurement = Union[Measurement, AggregateMeasurement]
 
 
 class Peripheral:
@@ -270,13 +99,15 @@ class Peripheral:
     COMMANDS = False
 
     def __init__(
-        self, id: int, name: str, peripheral_device_manager: PeripheralManager
+        self, id: int, name: str, peripheral_device_manager: "PeripheralManager"
     ):
         self.id = id
         self.name = name
         self.manager = peripheral_device_manager
         self.logger = logger.getChild("peripheral").getChild(self.name)
-        self._publish_handle: Optional[Callable[[RawOrAggregateMeasurement], Awaitable[None]]] = None
+        self._publish_handle: Optional[
+            Callable[[RawOrAggregateMeasurement], Awaitable[None]]
+        ] = None
 
     @abc.abstractmethod
     async def run(self):
@@ -432,7 +263,7 @@ class Sensor(Peripheral):
                 await self._publish_measurement(reduced_measurement)
 
     @abc.abstractmethod
-    async def measure(self) -> Union[Measurement, Iterable[Measurement]]:
+    async def measure(self) -> "Union[Measurement, Iterable[Measurement]]":
         raise NotImplementedError()
 
     async def _publish_measurement(self, measurement: RawOrAggregateMeasurement):
@@ -598,67 +429,6 @@ class QuantityType(object):
             return self.physical_unit_symbol
         else:
             return self.physical_unit
-
-
-class Measurement(object):
-    """
-    Measurement class.
-    """
-
-    def __init__(
-        self,
-        peripheral: Peripheral,
-        quantity_type: QuantityType,
-        value: float,
-        datetime: dt.datetime,
-    ):
-        self.id = uuid.uuid4()
-        self.peripheral = peripheral
-        self.quantity_type = quantity_type
-        self.value = value
-        self.datetime = datetime
-
-    def __str__(self):
-        return "%s - %s %s: %s %s [%s]" % (
-            self.datetime,
-            self.peripheral,
-            self.quantity_type.physical_quantity,
-            self.value,
-            self.quantity_type.physical_unit,
-            self.id,
-        )
-
-
-class AggregateMeasurement(object):
-    """
-    Aggregate measurement class.
-    """
-
-    def __init__(
-        self,
-        peripheral: Peripheral,
-        quantity_type: QuantityType,
-        values: Dict[str, float],
-        start_datetime: dt.datetime,
-        end_datetime: dt.datetime,
-    ):
-        self.id = uuid.uuid4()
-        self.peripheral = peripheral
-        self.quantity_type = quantity_type
-        self.values = values
-        self.start_datetime = start_datetime
-        self.end_datetime = end_datetime
-
-    def __str__(self):
-        return "%s-%s - %s %s %s [%s]: %s" % (
-            self.start_datetime,
-            self.end_datetime,
-            self.peripheral,
-            self.quantity_type.physical_quantity,
-            self.quantity_type.physical_unit,
-            self.id,
-            self.values,
-        )
 
 
 class Display(Peripheral):
@@ -854,3 +624,237 @@ class LocalDataLogger(Actuator):
                 # File is new: write csv header.
                 writer.writeheader()
             writer.writerow(measurement_dict)
+
+
+class PeripheralManager(object):
+    """
+    A peripheral device manager; this manager keeps track of all peripherals,
+    provides the ability to subscribe to peripheral device measurements,
+    and provides the ability to run all runnable peripheral devices (such as
+    sensors).
+    """
+
+    def __init__(self):
+        self._peripherals: Dict[str, Peripheral] = {}
+        self._peripheral_control_locks: Dict[Peripheral, PeripheralControl] = {}
+        self._debug_display: Peripheral = None
+        self._measurement_txs: List[
+            trio.MemorySendChannel[RawOrAggregateMeasurement]
+        ] = []
+        self.event_loop = None
+        self.quantity_types: List[QuantityType] = []
+
+        (measurement_tx, measurement_rx) = trio.open_memory_channel[
+            RawOrAggregateMeasurement
+        ](64)
+        self._measurement_tx = measurement_tx
+        self._measurement_rx = measurement_rx
+
+    def set_quantity_types(self, quantity_types: Iterable[Dict[str, Any]]):
+        """
+        Set the quantity types known to the server.
+        """
+        self.quantity_types = list(
+            map(
+                lambda qt: QuantityType(
+                    qt["id"],
+                    qt["physicalQuantity"],
+                    qt["physicalUnit"],
+                    physical_unit_symbol=qt["physicalUnitSymbol"] or None,
+                ),
+                quantity_types,
+            )
+        )
+
+    def measurements_receiver(
+        self, buffer: int = 10
+    ) -> "trio.MemoryReceiveChannel[RawOrAggregateMeasurement]":
+        """
+        Create and get a measurement receiver channel.
+
+        If the receiver does not keep up with the messages, the channel will
+        be dropped.
+        """
+        tx, rx = trio.open_memory_channel[RawOrAggregateMeasurement](buffer)
+        self._measurement_txs.append(tx)
+
+        return rx
+
+    def _get_quantity_type(
+        self, physical_quantity: str, physical_unit: str
+    ) -> Optional[QuantityType]:
+        for qt in self.quantity_types:
+            if (
+                qt.physical_quantity == physical_quantity
+                and qt.physical_unit == physical_unit
+            ):
+                return qt
+        return None
+
+    def create_raw_measurement(
+        self,
+        peripheral: Peripheral,
+        physical_quantity: str,
+        physical_unit: str,
+        value: float,
+        datetime: Optional[dt.datetime] = None,
+    ) -> Optional[Measurement]:
+        quantity_type = self._get_quantity_type(physical_quantity, physical_unit)
+        if quantity_type is None:
+            return None
+
+        return Measurement(
+            peripheral,
+            quantity_type,
+            value,
+            datetime=datetime or dt.datetime.now(dt.timezone.utc),
+        )
+
+    def create_aggregate_measurement(
+        self,
+        peripheral: Peripheral,
+        physical_quantity: str,
+        physical_unit: str,
+        values: Dict[str, float],
+        start_datetime: dt.datetime,
+        end_datetime: Optional[dt.datetime] = None,
+    ) -> Optional[AggregateMeasurement]:
+        quantity_type = self._get_quantity_type(physical_quantity, physical_unit)
+        if quantity_type is None:
+            return None
+
+        return AggregateMeasurement(
+            peripheral,
+            quantity_type,
+            values,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime or dt.datetime.now(dt.timezone.utc),
+        )
+
+    @property
+    def runnable_peripherals(self) -> Iterable[Peripheral]:
+        """
+        :return: An iterable of all runnable peripherals.
+        """
+        return filter(
+            lambda peripheral: peripheral.RUNNABLE, self._peripherals.values()
+        )
+
+    @property
+    def peripherals(self) -> Iterable[Peripheral]:
+        """
+        :return: An iterable of all peripherals.
+        """
+        return self._peripherals.values()
+
+    def control(self, peripheral: Peripheral) -> PeripheralControl:
+        """
+        :return: An async context manager for getting exclusive control access to a peripheral.
+        """
+        if peripheral not in self._peripheral_control_locks:
+            self._peripheral_control_locks[peripheral] = PeripheralControl(
+                peripheral, trio.Lock()
+            )
+        return self._peripheral_control_locks[peripheral]
+
+    def get_peripheral_by_name(self, name: str) -> Optional[Peripheral]:
+        """
+        :param name: The name of the peripheral to get.
+        :return: Get the peripheral with the given name, or None if no such
+        peripheral exists.
+        """
+        if name in self._peripherals:
+            return self._peripherals[name]
+        else:
+            return None
+
+    async def run_debug_display(self):
+        """
+        Run the debug display device.
+        """
+        if self._debug_display:
+            await self._debug_display.run()
+
+    async def run(self):
+        """
+        Run all runnable peripherals and broadcast measurements.
+        """
+        async with trio.open_nursery() as nursery:
+            for peripheral in self.runnable_peripherals:
+                nursery.start_soon(peripheral.run)
+
+            async for measurement in self._measurement_rx:
+                await self._broadcast(measurement)
+
+    async def _publish_handle(self, measurement: RawOrAggregateMeasurement):
+        """
+        Handle to pass to peripherals for publishing measurements.
+
+        :param measurement: The measurement to publish.
+        """
+        await self._measurement_tx.send(measurement)
+
+    async def _broadcast(self, measurement: RawOrAggregateMeasurement):
+        """
+        Broadcast measurement to listener channels.
+
+        :param measurement: The measurement to broadcast.
+        """
+        for i in reversed(range(len(self._measurement_txs))):
+            tx = self._measurement_txs[i]
+            try:
+                tx.send_nowait(measurement)
+            except (trio.WouldBlock, trio.EndOfChannel):
+                await tx.aclose()
+                del self._measurement_txs[i]
+
+    def create_peripheral(
+        self,
+        peripheral_class: Callable[..., "Peripheral"],
+        id: int,
+        name: str,
+        configuration: Any,
+    ) -> Peripheral:
+        """
+        Create and add a peripheral by its class name.
+
+        :param peripheral_class: The class of the peripheral to add.
+        :param id: The id of the specific peripheral to add.
+        :param name: The name of the peripheral.
+        :param configuration: The instantiation paramaters (configuration) of the peripheral.
+        :return: The created peripheral.
+        """
+        logger.debug("creating peripheral %s", name)
+
+        # Instantiate peripheral
+        peripheral = peripheral_class(id, name, self, configuration=configuration)
+
+        # Set message publication handle
+        peripheral._set_publish_handle(self._publish_handle)
+
+        self._peripherals[name] = peripheral
+
+        return peripheral
+
+    def create_debug_display(
+        self, peripheral_class: Callable[..., Display], configuration: Any
+    ) -> Display:
+        """
+        Create a peripheral used for displaying debug messages.
+
+        :param peripheral_class: The class of the peripheral to add.
+        :param configuration: The instantiation parameters (configuration) of the peripheral.
+        """
+        logger.debug("creating debug display peripheral")
+
+        # Instantiate peripheral
+        peripheral = peripheral_class(
+            -1, "debug-display-device", self, configuration=configuration
+        )
+
+        # Set message publication handle
+        peripheral._set_publish_handle(self._publish_handle)
+
+        self._debug_display = peripheral
+
+        return peripheral
