@@ -149,7 +149,7 @@ class Triangle(Shape):
         return (self.x, total_mass)
 
 
-def centroid(curves: List[Tuple[Shape, Fuzzy]]) -> float:
+def centroid(curves: List[Tuple[Shape, Fuzzy]]) -> Fuzzy:
     """Calculate the centroid of the given curves with max membership values."""
 
     total_mass = 0.0
@@ -161,9 +161,9 @@ def centroid(curves: List[Tuple[Shape, Fuzzy]]) -> float:
         total_center_of_mass += center * mass
 
     if total_mass == 0.0:
-        return total_center_of_mass / len(curves)
+        return Fuzzy(total_center_of_mass / len(curves))
 
-    return total_center_of_mass / total_mass
+    return Fuzzy(total_center_of_mass / total_mass)
 
 
 def argmax(fn: Callable[[T], Any], args: Iterable[T]):

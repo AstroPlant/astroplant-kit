@@ -31,6 +31,7 @@ InputFuzzyVar = str
 OutputFuzzyVar = str
 TimeStr = str
 PeripheralName = str
+QuantityTypeIdStr = str
 QuantityTypeId = int
 Minutes = int
 CommandName = str
@@ -66,17 +67,22 @@ class Hedge(Enum):
     Slightly = "slightly"
 
 
+class Setpoint(TypedDict):
+    time: str
+    value: float
+
+
 class InputSettings(TypedDict):
     nominalRange: float
     nominalDeltaRange: float
     deltaMeasurements: int
-    setpoints: Dict[TimeStr, float]
+    setpoints: List[Setpoint]
     interpolation: int
 
 
 class OutputSettingsContinuous(TypedDict):
-    lowest: float
-    highest: float
+    minimal: float
+    maximal: float
 
 
 class OutputSettingsDiscrete(TypedDict):
@@ -117,7 +123,7 @@ class FuzzyRule(TypedDict):
 
 
 class FuzzyControlRules(TypedDict):
-    input: Dict[PeripheralName, Dict[QuantityTypeId, InputSettings]]
+    input: Dict[PeripheralName, Dict[QuantityTypeIdStr, InputSettings]]
     output: Dict[PeripheralName, Dict[CommandName, OutputSettings]]
     rules: List[FuzzyRule]
 
@@ -139,16 +145,16 @@ def seconds_between_times(time1: time, time2: time) -> int:
 
 class Setpoints:
     def __init__(
-        self, setpoints: Dict[TimeStr, float], interpolation: int,
+        self, setpoints: List[Setpoint], interpolation: int,
     ):
         self._setpoints: Dict[time, float] = {}
         self._times: List[time] = []
         self._interpolation = interpolation
 
-        for (from_time, setpoint) in setpoints.items():
-            t = time.fromisoformat(from_time)
+        for setpoint in setpoints:
+            t = time.fromisoformat(setpoint["time"])
             self._times.append(t)
-            self._setpoints[t] = setpoint
+            self._setpoints[t] = setpoint["value"]
 
     def for_time(self, t: time) -> float:
         current_time = self._times[-1]
@@ -174,7 +180,7 @@ class Setpoints:
 
 class Input:
     def __init__(
-        self, input_settings: Dict[PeripheralName, Dict[QuantityTypeId, InputSettings]],
+        self, input_settings: Dict[PeripheralName, Dict[QuantityTypeIdStr, InputSettings]],
     ):
         self._shapes: Dict[InputFuzzySet, Shape] = {}
         self._error_transforms: Dict[
@@ -208,7 +214,8 @@ class Input:
             return transform
 
         for (peripheral, qt_input_settings) in input_settings.items():
-            for (quantity_type, settings) in qt_input_settings.items():
+            for (quantity_type_str, settings) in qt_input_settings.items():
+                quantity_type = int(quantity_type_str)
                 self._setpoints[(peripheral, quantity_type)] = Setpoints(
                     settings["setpoints"], settings["interpolation"]
                 )
@@ -285,8 +292,8 @@ class Output:
 
         def output_transform(output_settings: OutputSettings):
             assert output_settings["continuous"] is not None
-            lowest = output_settings["continuous"]["lowest"]
-            highest = output_settings["continuous"]["highest"]
+            lowest = output_settings["continuous"]["minimal"]
+            highest = output_settings["continuous"]["maximal"]
 
             def transform(x: Fuzzy) -> float:
                 val = lowest + x * (highest - lowest)
@@ -339,11 +346,10 @@ class Evaluator:
             self.peripheral = condition["peripheral"]
             self.quantity_type = condition["quantityType"]
             self.fuzzy_var = InputFuzzySet(condition["fuzzyVariable"])
-            self.negation = condition["negation"]
-            self.delta = condition["delta"]
-            self.hedge = (
-                None if condition["hedge"] is None else Hedge(condition["hedge"])
-            )
+            self.negation = condition.get("negation", False)
+            self.delta = condition.get("delta", False)
+            hedge = condition.get("hedge", None)
+            self.hedge = None if hedge is None else Hedge(hedge)
 
             if self.delta:
                 raise NotImplementedError("Deltas are not yet implemented")
