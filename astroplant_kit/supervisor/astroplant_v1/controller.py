@@ -257,9 +257,6 @@ class Input:
             if old_value != self._membership_values[(p.name, qt.id, fuzzy_var)]:
                 changed.add((p.name, qt.id, fuzzy_var))
 
-        for membership in self._membership_values.items():
-            print(membership)
-
         return changed
 
     def membership_value(
@@ -360,7 +357,7 @@ class Evaluator:
             truth = input.membership_value(
                 self.peripheral, self.quantity_type, self.fuzzy_var
             )
-            print(truth)
+
             if truth is None:
                 return FUZZY_FALSE
 
@@ -408,8 +405,6 @@ class Evaluator:
             if evaluate:
                 fuzzy = FUZZY_TRUE
                 for condition in rule.condition:
-                    print(condition.__dict__)
-                    print(condition.evaluate(self._input))
                     fuzzy = And(fuzzy, condition.evaluate(self._input))
 
                 for (p, command, fuzzy_var) in rule.implication:
