@@ -1,5 +1,5 @@
 """
-Specifies the abstract kit supervisor, a base class to be extended, intended to
+Specifies the abstract kit controller, a base class to be extended, intended to
 link sensors and actuators together.
 """
 
@@ -8,7 +8,7 @@ import abc
 from ..peripheral import PeripheralManager
 
 
-class Supervisor:
+class Controller:
     def __init__(self, peripheral_manager: PeripheralManager, rules: Any):
         self.peripheral_manager = peripheral_manager
         self.rules = rules
@@ -16,6 +16,6 @@ class Supervisor:
     @abc.abstractmethod
     async def run(self):
         """
-        Asynchronously run the supervisor.
+        Asynchronously run the controller.
         """
         raise NotImplementedError()

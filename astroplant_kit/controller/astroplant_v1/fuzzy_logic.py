@@ -22,7 +22,7 @@ from typing import (
 )
 from typing_extensions import TypedDict
 
-logger = logging.getLogger("astroplant_kit.supervisor.astroplant_v1")
+logger = logging.getLogger("astroplant_kit.controller.astroplant_v1")
 
 T = TypeVar("T")
 

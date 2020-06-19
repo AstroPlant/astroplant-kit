@@ -18,7 +18,7 @@ import time
 import importlib
 import logging
 from astroplant_kit import peripheral
-from astroplant_kit.supervisor import Supervisor
+from astroplant_kit.controller import Controller
 from astroplant_kit import errors
 from .api import Client, RpcError
 from .cache import Cache
@@ -33,8 +33,8 @@ class Kit(object):
         self.halt = False
         self.startup_time = datetime.datetime.now()
 
-        self._modules: Dict[str, Any]  = {}
-        self._supervisor: Optional[Supervisor] = None
+        self._modules: Dict[str, Any] = {}
+        self._controller: Optional[Controller] = None
         self.peripheral_manager = peripheral.PeripheralManager()
         self.api_client = api_client
         self.cache = cache
@@ -89,20 +89,21 @@ class Kit(object):
         logger.info(f"Activating configuration {configuration['description']}")
 
         modules = set()
-        modules.add(configuration["rulesSupervisorModuleName"])
+        modules.add(configuration["controllerSymbolLocation"])
 
         for peripheral_with_definition in configuration["peripherals"]:
             definition = peripheral_with_definition["definition"]
-            modules.add(definition["moduleName"])
+            modules.add(definition["symbolLocation"])
 
         self._import_modules(modules)
         self._configure_peripherals(configuration["peripherals"])
 
-        supervisor_class = self._modules[
-            configuration["rulesSupervisorModuleName"]
-        ].__dict__[configuration["rulesSupervisorClassName"]]
-        self._supervisor = supervisor_class(
-            self.peripheral_manager, configuration["rules"]
+        controller_class = self._modules[
+            configuration["controllerSymbolLocation"]
+        ].__dict__[configuration["controllerSymbol"]]
+
+        self._controller = controller_class(
+            self.peripheral_manager, configuration["controlRules"]
         )
 
     def _import_modules(self, modules):
@@ -126,8 +127,8 @@ class Kit(object):
             peripheral = peripheral_with_definition["peripheral"]
             definition = peripheral_with_definition["definition"]
 
-            module_name = definition["moduleName"]
-            class_name = definition["className"]
+            module_name = definition["symbolLocation"]
+            class_name = definition["symbol"]
             try:
                 logger.debug(f"Initializing a peripheral of {module_name}.{class_name}")
                 peripheral_class = self._modules[module_name].__dict__[class_name]
@@ -199,9 +200,7 @@ class Kit(object):
                     return
 
             if configuration is None:
-                logger.error(
-                    f"No configuration set. Exiting."
-                )
+                logger.error(f"No configuration set. Exiting.")
                 raise errors.NoConfigurationError()
 
             try:
@@ -223,6 +222,6 @@ class Kit(object):
             measurements_rx = self.peripheral_manager.measurements_receiver()
 
             nursery.start_soon(self.peripheral_manager.run)
-            nursery.start_soon(self._supervisor.run)
+            nursery.start_soon(self._controller.run)
             async for measurement in measurements_rx:
                 self.publish_measurement(measurement)

@@ -8,7 +8,7 @@ from typing import NewType, Optional, Iterable, Callable, Dict, List, Set, Tuple
 from typing_extensions import TypedDict
 
 from ...peripheral import PeripheralManager, Peripheral, Measurement
-from ..supervisor import Supervisor
+from ..controller import Controller
 from .fuzzy_logic import (
     FUZZY_TRUE,
     FUZZY_FALSE,
@@ -24,7 +24,7 @@ from .fuzzy_logic import (
     centroid,
 )
 
-logger = logging.getLogger("astroplant_kit.supervisor.astroplant_v1")
+logger = logging.getLogger("astroplant_kit.controller.astroplant_v1")
 
 
 InputFuzzyVar = str
@@ -419,9 +419,9 @@ class Evaluator:
         return set(output.keys())
 
 
-class AstroplantSupervisorV1(Supervisor):
+class AstroplantControllerV1(Controller):
     """
-    The AstroPlant supervisor assumes peripheral devices' commands are
+    The AstroPlant controller assumes peripheral devices' commands are
     idempotent.
     """
 
