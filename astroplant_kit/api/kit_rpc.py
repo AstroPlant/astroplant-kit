@@ -5,8 +5,15 @@ import json
 from .schema import astroplant_capnp
 from ..peripheral import PeripheralCommandResult
 
+from typing import Any
+from typing_extensions import Protocol
 
 logger = logging.getLogger("astroplant_kit.api")
+
+
+class Response(Protocol):
+    def to_bytes_packed(self) -> bytes:
+        ...
 
 
 class KitRpcHandler(abc.ABC):
@@ -42,16 +49,16 @@ class KitRpc(object):
         self._kit_rpc_response_handle = kit_rpc_response_handle
         self._handler = None
 
-    def _register_handler(self, kit_rpc_handler):
+    def _register_handler(self, kit_rpc_handler: KitRpcHandler) -> None:
         self._handler = kit_rpc_handler
 
-    def _send_response(self, response):
+    def _send_response(self, response: Response) -> None:
         """
         Send an RPC response over MQTT.
         """
         self._kit_rpc_response_handle(response.to_bytes_packed())
 
-    async def _handle_request(self, request):
+    async def _handle_request(self, request: astroplant_capnp.KitRpcRequest) -> None:
         rpc = self._handler
 
         response = astroplant_capnp.KitRpcResponse.new_message(id=request.id)
@@ -100,7 +107,7 @@ class KitRpc(object):
 
         self._send_response(response)
 
-    async def _on_request(self, data):
+    async def _on_request(self, data: bytes) -> None:
         if not self._handler:
             logger.warn("Received RPC request, but kit RPC handler is not registered.")
             return
