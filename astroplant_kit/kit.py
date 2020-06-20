@@ -23,7 +23,7 @@ from astroplant_kit import errors
 from .api import Client, RpcError
 from .cache import Cache
 
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, List, Iterable
 
 logger = logging.getLogger("astroplant_kit.kit")
 
@@ -41,7 +41,7 @@ class Kit(object):
 
         self.initialise_debug(debug_configuration)
 
-    def initialise_debug(self, debug_configuration):
+    def initialise_debug(self, debug_configuration: Any) -> None:
         """
         Initialise debugging options from the given debug configuration dictionary.
 
@@ -70,7 +70,7 @@ class Kit(object):
             logger.info("Peripheral debug display device created.")
 
             log_handler = logging.StreamHandler(
-                peripheral.DisplayDeviceStream(peripheral_device)
+                peripheral.DisplayDeviceStream(peripheral_device)  # type: ignore
             )
             log_handler.setLevel(debug_level)
             formatter = logging.Formatter("%(levelname)s\n%(message)s")
@@ -79,7 +79,7 @@ class Kit(object):
             logger.addHandler(log_handler)
             logger.debug("Peripheral debug display device log handler added.")
 
-    def _configure(self, configuration):
+    def _configure(self, configuration: Any) -> None:
         """
         Configure the kit.
         """
@@ -106,7 +106,7 @@ class Kit(object):
             self.peripheral_manager, configuration["controlRules"]
         )
 
-    def _import_modules(self, modules):
+    def _import_modules(self, modules: Iterable[str]) -> None:
         """
         Import Python modules by name and add them to the dictionary
         of loaded peripheral modules.
@@ -117,7 +117,7 @@ class Kit(object):
             module = importlib.import_module(module_name)
             self._modules[module_name] = module
 
-    def _configure_peripherals(self, peripherals):
+    def _configure_peripherals(self, peripherals: Iterable[Any]) -> None:
         """
         Configure the kit peripherals using configuration dicts.
 
@@ -156,7 +156,7 @@ class Kit(object):
         elif data.is_aggregate_measurement():
             self.api_client.publish_aggregate_measurement(data.aggregate_measurement)
 
-    async def run(self):
+    async def run(self) -> None:
         """
         Run the kit.
         """
@@ -169,19 +169,19 @@ class Kit(object):
             self.halt = True
             print("HALT received...")
 
-    async def _fetch_and_store_configuration(self):
+    async def _fetch_and_store_configuration(self) -> Any:
         logger.debug("Fetching kit configuration.")
         configuration = await self.api_client.server_rpc.get_active_configuration()
         self.cache.write_configuration(configuration)
         return configuration
 
-    async def _fetch_and_store_quantity_types(self):
+    async def _fetch_and_store_quantity_types(self) -> List[Dict[str, Any]]:
         logger.debug("Fetching quantity types.")
         quantity_types = await self.api_client.server_rpc.get_quantity_types()
         self.cache.write_quantity_types(quantity_types)
         return quantity_types
 
-    async def bootstrap(self):
+    async def bootstrap(self) -> None:
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self.peripheral_manager.run_debug_display)
 

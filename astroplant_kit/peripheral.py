@@ -177,7 +177,7 @@ class Peripheral:
         )
 
     @abc.abstractmethod
-    async def run(self):
+    async def run(self) -> None:
         """
         Asynchronously run the peripheral device.
         """
@@ -198,13 +198,13 @@ class Peripheral:
     def get_name(self) -> str:
         return self.name
 
-    def _set_publish_handle(self, publish_handle: Callable):
+    def _set_publish_handle(self, publish_handle: Callable) -> None:
         """
         Set the handle this device's data should be published to.
         """
         self._publish_handle = publish_handle
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -262,12 +262,12 @@ class Sensor(Peripheral):
             end_datetime=end_datetime,
         )
 
-    async def run(self):
+    async def run(self) -> None:
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self._make_measurements)
             nursery.start_soon(self._reduce_measurements)
 
-    async def _make_measurements(self):
+    async def _make_measurements(self) -> None:
         """
         Repeatedly make measurements.
         """
@@ -288,7 +288,7 @@ class Sensor(Peripheral):
                 await self._publish_data(Data(measurement))
             await trio.sleep(self.measurement_interval)
 
-    async def _reduce_measurements(self):
+    async def _reduce_measurements(self) -> None:
         """
         Repeatedly reduce multiple measurements made to a single measurement.
         """
@@ -402,11 +402,11 @@ class PeripheralControl(object):
         self._reset_on_exit = False
 
     @property
-    def reset_on_exit(self):
+    def reset_on_exit(self) -> bool:
         return self._reset_on_exit
 
     @reset_on_exit.setter
-    def reset_on_exit(self, reset_on_exit):
+    def reset_on_exit(self, reset_on_exit: bool) -> None:
         owner = self._lock.statistics().owner
         if owner is None or trio.hazmat.current_task() is not owner:
             raise Exception(
@@ -414,13 +414,13 @@ class PeripheralControl(object):
             )
         self._reset_on_exit = reset_on_exit
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Callable[[Any], Awaitable[PeripheralCommandResult]]:
         """
         :return: A handle to an async function to send commands to the peripheral device.
         """
         return await self.acquire()
 
-    async def __aexit__(self, _type, _value, _traceback):
+    async def __aexit__(self, _type, _value, _traceback) -> None:
         if self._reset_on_exit:
             await self.reset_and_release()
         else:
@@ -447,14 +447,14 @@ class PeripheralControl(object):
         self._reset_command = self._previous_command
         return self._do
 
-    def release(self):
+    def release(self) -> None:
         """
         Release the underlying lock.
         """
         self._lock.release()
         self._reset_on_exit = False
 
-    async def reset_and_release(self):
+    async def reset_and_release(self) -> None:
         """
         Reset to the last command received prior to lock acquisition,
         then release the underlying lock.
@@ -515,7 +515,7 @@ class Display(Peripheral):
         self._trio_token = None
         self._condition = trio.Condition()
 
-    async def _update_measurements(self):
+    async def _update_measurements(self) -> None:
         """
         Listen to new measurements and handle them.
         """
@@ -529,7 +529,7 @@ class Display(Peripheral):
                     )
                 ] = measurement
 
-    async def run(self):
+    async def run(self) -> None:
         idx = 0
 
         self._trio_token = trio.hazmat.current_trio_token()
@@ -566,11 +566,11 @@ class Display(Peripheral):
                         async with self._condition:
                             await self._condition.wait()
 
-    async def _condition_notify(self):
+    async def _condition_notify(self) -> None:
         async with self._condition:
             self._condition.notify()
 
-    def add_log_message(self, msg: str):
+    def add_log_message(self, msg: str) -> None:
         """
         Add a log message to be displayed on the device.
 
@@ -591,7 +591,7 @@ class Display(Peripheral):
             thread.start()
 
     @abc.abstractmethod
-    def display(self, message: str):
+    def display(self, message: str) -> None:
         """
         Display a string on the device.
 
@@ -608,7 +608,7 @@ class DebugDisplay(Display):
     def __init__(self, *args, configuration: Any):
         super().__init__(*args)
 
-    def display(self, message: str):
+    def display(self, message: str) -> None:
         print("Debug Display: %s" % message)
 
 
@@ -617,7 +617,7 @@ class BlackHoleDisplay(Display):
     A trivial peripheral display device implementation ignoring all display messages.
     """
 
-    def display(self, message: str):
+    def display(self, message: str) -> None:
         pass
 
 
@@ -630,10 +630,10 @@ class DisplayDeviceStream(object):
         self.peripheral_display_device = peripheral_display_device
         self.str = ""
 
-    def write(self, str: str):
+    def write(self, str: str) -> None:
         self.str += str
 
-    def flush(self):
+    def flush(self) -> None:
         self.peripheral_display_device.add_log_message(self.str)
         self.str = ""
 
@@ -649,7 +649,7 @@ class LocalDataLogger(Actuator):
         super().__init__(*args)
         self.storage_path = configuration["storagePath"]
 
-    async def run(self):
+    async def run(self) -> None:
         """
         Listen to new aggregate measurements and store them.
         """
@@ -720,7 +720,7 @@ class PeripheralManager(object):
         self._data_tx = data_tx
         self._data_rx = data_rx
 
-    def set_quantity_types(self, quantity_types: Iterable[Dict[str, Any]]):
+    def set_quantity_types(self, quantity_types: Iterable[Dict[str, Any]]) -> None:
         """
         Set the quantity types known to the server.
         """
@@ -836,14 +836,14 @@ class PeripheralManager(object):
         else:
             return None
 
-    async def run_debug_display(self):
+    async def run_debug_display(self) -> None:
         """
         Run the debug display device.
         """
         if self._debug_display:
             await self._debug_display.run()
 
-    async def run(self):
+    async def run(self) -> None:
         """
         Run all runnable peripherals and broadcast data.
         """

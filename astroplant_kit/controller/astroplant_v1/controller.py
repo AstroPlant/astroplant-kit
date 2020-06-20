@@ -288,7 +288,9 @@ class Output:
                 triangle_offset, self.triangle_half_width
             )
 
-        def output_transform(output_settings: OutputSettings):
+        def output_transform(
+            output_settings: OutputSettings,
+        ) -> Callable[[Fuzzy], float]:
             assert output_settings["continuous"] is not None
             lowest = output_settings["continuous"]["minimal"]
             highest = output_settings["continuous"]["maximal"]
@@ -323,7 +325,7 @@ class Output:
         command: CommandName,
         fuzzy_var: OutputFuzzySet,
         value: Fuzzy,
-    ):
+    ) -> None:
         self._membership_values[(peripheral, command)][fuzzy_var] = value
 
     def defuzzified_action(
@@ -436,7 +438,7 @@ class AstroplantControllerV1(Controller):
         self._output = Output(fuzzy_control["output"])
         self._evaluator = Evaluator(fuzzy_control["rules"], self._input, self._output)
 
-    async def run(self):
+    async def run(self) -> None:
         """
         TODO: apply rules on a timer as well, especially useful when
         measurements come in slowly.
