@@ -152,8 +152,10 @@ class Kit(object):
         :param measurement: The measurement to publish.
         """
         if data.is_measurement():
+            assert data.measurement is not None
             self.api_client.publish_raw_measurement(data.measurement)
         elif data.is_aggregate_measurement():
+            assert data.aggregate_measurement is not None
             self.api_client.publish_aggregate_measurement(data.aggregate_measurement)
 
     async def run(self) -> None:
