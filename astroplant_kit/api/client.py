@@ -10,7 +10,7 @@ from .server_rpc import ServerRpc
 from .kit_rpc import KitRpc, KitRpcHandler
 from ..peripheral import Measurement, AggregateMeasurement
 
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 logger = logging.getLogger("astroplant_kit.api.client")
 
@@ -118,7 +118,9 @@ class Client:
         """
         return self._server_rpc
 
-    def _on_connect(self, client, user_data, flags, rc) -> None:
+    def _on_connect(
+        self, client: mqtt.Client, user_data: Any, flags: Dict[str, int], rc: int
+    ) -> None:
         """
         Handles (re)connections.
         """
@@ -127,7 +129,7 @@ class Client:
         self._mqtt_client.subscribe(f"kit/{self.serial}/kit-rpc/request", qos=1)
         self.connected = True
 
-    def _on_disconnect(self, client, user_data, rc) -> None:
+    def _on_disconnect(self, client: mqtt.Client, user_data: Any, rc: int) -> None:
         """
         Handles disconnections.
         """
