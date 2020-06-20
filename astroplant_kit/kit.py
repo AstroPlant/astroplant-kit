@@ -145,16 +145,16 @@ class Kit(object):
                 peripheral["configuration"],
             )
 
-    def publish_measurement(self, measurement):
+    def publish_data(self, data: peripheral.Data) -> None:
         """
         Publish a measurement to the back-end.
 
         :param measurement: The measurement to publish.
         """
-        if isinstance(measurement, peripheral.Measurement):
-            self.api_client.publish_raw_measurement(measurement)
-        else:
-            self.api_client.publish_aggregate_measurement(measurement)
+        if data.is_measurement():
+            self.api_client.publish_raw_measurement(data.measurement)
+        elif data.is_aggregate_measurement():
+            self.api_client.publish_aggregate_measurement(data.aggregate_measurement)
 
     async def run(self):
         """
@@ -219,9 +219,9 @@ class Kit(object):
 
             self.peripheral_manager.set_quantity_types(quantity_types)
             self._configure(configuration)
-            measurements_rx = self.peripheral_manager.measurements_receiver()
+            data_rx = self.peripheral_manager.data_receiver()
 
             nursery.start_soon(self.peripheral_manager.run)
             nursery.start_soon(self._controller.run)
-            async for measurement in measurements_rx:
-                self.publish_measurement(measurement)
+            async for data in data_rx:
+                self.publish_data(data)

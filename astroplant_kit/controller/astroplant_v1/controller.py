@@ -441,8 +441,9 @@ class AstroplantControllerV1(Controller):
         TODO: apply rules on a timer as well, especially useful when
         measurements come in slowly.
         """
-        async for measurement in self.peripheral_manager.measurements_receiver():
-            if not isinstance(measurement, Measurement):
+        async for data in self.peripheral_manager.data_receiver():
+            measurement = data.measurement
+            if measurement is None:
                 continue
 
             changed = self._input.update(measurement)

@@ -13,37 +13,7 @@ from typing import Any, Optional, Union, Iterable, Dict, List, Callable, Awaitab
 logger = logging.getLogger("astroplant_kit.peripheral")
 
 
-class Media(object):
-    """
-    A media object.
-    """
-
-    def __init__(
-        self,
-        peripheral: "Peripheral",
-        name: str,
-        type: str,
-        data: bytes,
-        metadata: Any,
-        datetime: dt.datetime,
-    ):
-        self.id = uuid.uuid4()
-        self.datetime = datetime
-        self.peripheral = peripheral
-        self.name = name
-        self.type = type
-        self.data = data
-        self.metadata = metadata
-        self.datetime = datetime
-
-
-class PeripheralCommandResult(
-    collections.namedtuple("PeripheralCommandResult", ["media"])
-):
-    media: Optional[Media]
-
-
-class Measurement(object):
+class Measurement:
     """
     Measurement class.
     """
@@ -72,7 +42,7 @@ class Measurement(object):
         )
 
 
-class AggregateMeasurement(object):
+class AggregateMeasurement:
     """
     Aggregate measurement class.
     """
@@ -104,7 +74,69 @@ class AggregateMeasurement(object):
         )
 
 
-RawOrAggregateMeasurement = Union[Measurement, AggregateMeasurement]
+class Media:
+    """
+    A media object.
+    """
+
+    def __init__(
+        self,
+        peripheral: "Peripheral",
+        name: str,
+        type: str,
+        data: bytes,
+        metadata: Any,
+        datetime: dt.datetime,
+    ):
+        self.id = uuid.uuid4()
+        self.datetime = datetime
+        self.peripheral = peripheral
+        self.name = name
+        self.type = type
+        self.data = data
+        self.metadata = metadata
+        self.datetime = datetime
+
+
+class PeripheralCommandResult(
+    collections.namedtuple("PeripheralCommandResult", ["media"])
+):
+    media: Optional[Media]
+
+
+class Data:
+    def __init__(self, data: Any):
+        self.data = data
+
+    @property
+    def measurement(self) -> Optional[Measurement]:
+        if isinstance(self.data, Measurement):
+            return self.data
+        else:
+            return None
+
+    def is_measurement(self) -> bool:
+        return self.measurement is not None
+
+    @property
+    def aggregate_measurement(self) -> Optional[AggregateMeasurement]:
+        if isinstance(self.data, AggregateMeasurement):
+            return self.data
+        else:
+            return None
+
+    def is_aggregate_measurement(self) -> bool:
+        return self.aggregate_measurement is not None
+
+    @property
+    def media(self) -> Optional[Media]:
+        if isinstance(self.data, Media):
+            return self.data
+        else:
+            return None
+
+    def is_media(self) -> bool:
+        return self.media is not None
 
 
 class Peripheral:
@@ -125,9 +157,7 @@ class Peripheral:
         self.name = name
         self.manager = peripheral_device_manager
         self.logger = logger.getChild("peripheral").getChild(self.name)
-        self._publish_handle: Optional[
-            Callable[[RawOrAggregateMeasurement], Awaitable[None]]
-        ] = None
+        self._publish_handle: Optional[Callable[[Data], Awaitable[None]]] = None
 
     def create_media(
         self,
@@ -170,7 +200,7 @@ class Peripheral:
 
     def _set_publish_handle(self, publish_handle: Callable):
         """
-        Set the handle this device's measurements should be published to.
+        Set the handle this device's data should be published to.
         """
         self._publish_handle = publish_handle
 
@@ -249,13 +279,13 @@ class Sensor(Peripheral):
 
                 # Publish each measurement
                 for m in measurement:
-                    await self._publish_measurement(m)
+                    await self._publish_data(Data(m))
             else:
                 # Add measurement to the sensor's measurement list (for later reduction)
                 self.measurements.append(measurement)
 
                 # Publish the measurement
-                await self._publish_measurement(measurement)
+                await self._publish_data(Data(measurement))
             await trio.sleep(self.measurement_interval)
 
     async def _reduce_measurements(self):
@@ -297,17 +327,17 @@ class Sensor(Peripheral):
 
             # Publish reduced measurements
             for reduced_measurement in reduced_measurements:
-                await self._publish_measurement(reduced_measurement)
+                await self._publish_data(Data(reduced_measurement))
 
     @abc.abstractmethod
     async def measure(self) -> "Union[Measurement, Iterable[Measurement]]":
         raise NotImplementedError()
 
-    async def _publish_measurement(self, measurement: RawOrAggregateMeasurement):
+    async def _publish_data(self, data: Data) -> None:
         if self._publish_handle is None:
             raise Exception("Publish handle not set.")
 
-        await self._publish_handle(measurement)
+        await self._publish_handle(data)
 
     def reduce(
         self,
@@ -489,11 +519,15 @@ class Display(Peripheral):
         """
         Listen to new measurements and handle them.
         """
-        async for m in self.manager.measurements_receiver():
-            if isinstance(m, Measurement):
+        async for data in self.manager.data_receiver():
+            measurement = data.measurement
+            if measurement is not None:
                 self._measurements[
-                    (m.peripheral, m.quantity_type.physical_quantity)
-                ] = m
+                    (
+                        measurement.peripheral,
+                        measurement.quantity_type.physical_quantity,
+                    )
+                ] = measurement
 
     async def run(self):
         idx = 0
@@ -617,30 +651,33 @@ class LocalDataLogger(Actuator):
 
     async def run(self):
         """
-        Listen to new measurements and store them.
+        Listen to new aggregate measurements and store them.
         """
-        async for m in self.manager.measurements_receiver():
-            if isinstance(m, AggregateMeasurement):
-                self._store_measurement(m)
+        async for data in self.manager.data_receiver():
+            aggregate_measurement = data.aggregate_measurement
+            if aggregate_measurement is not None:
+                self._store_aggregate_measurement(aggregate_measurement)
 
-    def _store_measurement(self, measurement: AggregateMeasurement):
+    def _store_aggregate_measurement(
+        self, aggregate_measurement: AggregateMeasurement
+    ) -> None:
         # Import required modules.
         import csv
         import os
 
-        measurement_dict = {
-            "start_datetime": measurement.start_datetime,
-            "end_datetime": measurement.end_datetime,
-            "peripheral": measurement.peripheral.get_id(),
-            "peripheral_name": measurement.peripheral.name,
-            "physical_quantity": measurement.quantity_type.physical_quantity,
-            "physical_unit": measurement.quantity_type.physical_unit,
-            "values": measurement.values,
+        aggregate_measurement_dict = {
+            "start_datetime": aggregate_measurement.start_datetime,
+            "end_datetime": aggregate_measurement.end_datetime,
+            "peripheral": aggregate_measurement.peripheral.get_id(),
+            "peripheral_name": aggregate_measurement.peripheral.name,
+            "physical_quantity": aggregate_measurement.quantity_type.physical_quantity,
+            "physical_unit": aggregate_measurement.quantity_type.physical_unit,
+            "values": aggregate_measurement.values,
         }
 
         file_name = "%s-%s.csv" % (
-            measurement.end_datetime.strftime("%Y%m%d"),
-            measurement.quantity_type.physical_quantity,
+            aggregate_measurement.end_datetime.strftime("%Y%m%d"),
+            aggregate_measurement.quantity_type.physical_quantity,
         )
         path = os.path.join(self.storage_path, file_name)
 
@@ -651,16 +688,16 @@ class LocalDataLogger(Actuator):
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         with open(path, "a", newline="") as csv_file:
-            # Get the measurement object field names.
+            # Get the aggregate measurement object field names.
             # Sort them to ensure csv headers have
             # consistent field ordering.
-            field_names = sorted(measurement_dict.keys())
+            field_names = sorted(aggregate_measurement_dict.keys())
             writer = csv.DictWriter(csv_file, fieldnames=field_names)
 
             if not exists:
                 # File is new: write csv header.
                 writer.writeheader()
-            writer.writerow(measurement_dict)
+            writer.writerow(aggregate_measurement_dict)
 
 
 class PeripheralManager(object):
@@ -675,17 +712,13 @@ class PeripheralManager(object):
         self._peripherals: Dict[str, Peripheral] = {}
         self._peripheral_control_locks: Dict[Peripheral, PeripheralControl] = {}
         self._debug_display: Peripheral = None
-        self._measurement_txs: List[
-            trio.MemorySendChannel[RawOrAggregateMeasurement]
-        ] = []
+        self._data_txs: List[trio.MemorySendChannel[Data]] = []
         self.event_loop = None
         self.quantity_types: List[QuantityType] = []
 
-        (measurement_tx, measurement_rx) = trio.open_memory_channel[
-            RawOrAggregateMeasurement
-        ](64)
-        self._measurement_tx = measurement_tx
-        self._measurement_rx = measurement_rx
+        (data_tx, data_rx) = trio.open_memory_channel[Data](64)
+        self._data_tx = data_tx
+        self._data_rx = data_rx
 
     def set_quantity_types(self, quantity_types: Iterable[Dict[str, Any]]):
         """
@@ -703,17 +736,15 @@ class PeripheralManager(object):
             )
         )
 
-    def measurements_receiver(
-        self, buffer: int = 10
-    ) -> "trio.MemoryReceiveChannel[RawOrAggregateMeasurement]":
+    def data_receiver(self, buffer: int = 10) -> "trio.MemoryReceiveChannel[Data]":
         """
-        Create and get a measurement receiver channel.
+        Create and get a data receiver channel.
 
         If the receiver does not keep up with the messages, the channel will
         be dropped.
         """
-        tx, rx = trio.open_memory_channel[RawOrAggregateMeasurement](buffer)
-        self._measurement_txs.append(tx)
+        tx, rx = trio.open_memory_channel[Data](buffer)
+        self._data_txs.append(tx)
 
         return rx
 
@@ -814,36 +845,36 @@ class PeripheralManager(object):
 
     async def run(self):
         """
-        Run all runnable peripherals and broadcast measurements.
+        Run all runnable peripherals and broadcast data.
         """
         async with trio.open_nursery() as nursery:
             for peripheral in self.runnable_peripherals:
                 nursery.start_soon(peripheral.run)
 
-            async for measurement in self._measurement_rx:
-                await self._broadcast(measurement)
+            async for data in self._data_rx:
+                await self._broadcast(data)
 
-    async def _publish_handle(self, measurement: RawOrAggregateMeasurement):
+    async def _publish_handle(self, data: Data) -> None:
         """
-        Handle to pass to peripherals for publishing measurements.
+        Handle to pass to peripherals for publishing data.
 
-        :param measurement: The measurement to publish.
+        :param data: The data to publish.
         """
-        await self._measurement_tx.send(measurement)
+        await self._data_tx.send(data)
 
-    async def _broadcast(self, measurement: RawOrAggregateMeasurement):
+    async def _broadcast(self, data: Data) -> None:
         """
-        Broadcast measurement to listener channels.
+        Broadcast data to listener channels.
 
-        :param measurement: The measurement to broadcast.
+        :param data: The data to broadcast.
         """
-        for i in reversed(range(len(self._measurement_txs))):
-            tx = self._measurement_txs[i]
+        for i in reversed(range(len(self._data_txs))):
+            tx = self._data_txs[i]
             try:
-                tx.send_nowait(measurement)
+                tx.send_nowait(data)
             except (trio.WouldBlock, trio.EndOfChannel):
                 await tx.aclose()
-                del self._measurement_txs[i]
+                del self._data_txs[i]
 
     def create_peripheral(
         self,
