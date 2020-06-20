@@ -20,7 +20,7 @@ import logging
 from astroplant_kit import peripheral
 from astroplant_kit.controller import Controller
 from astroplant_kit import errors
-from .api import Client, RpcError
+from .api import Client, RpcError, server_rpc
 from .cache import Cache
 
 from typing import Any, Optional, Dict, List, Iterable
@@ -177,7 +177,7 @@ class Kit(object):
         self.cache.write_configuration(configuration)
         return configuration
 
-    async def _fetch_and_store_quantity_types(self) -> List[Dict[str, Any]]:
+    async def _fetch_and_store_quantity_types(self) -> List[server_rpc.QuantityType]:
         logger.debug("Fetching quantity types.")
         quantity_types = await self.api_client.server_rpc.get_quantity_types()
         self.cache.write_quantity_types(quantity_types)
@@ -219,7 +219,17 @@ class Kit(object):
                     )
                     return
 
-            self.peripheral_manager.set_quantity_types(quantity_types)
+            self.peripheral_manager.set_quantity_types(
+                map(
+                    lambda qt: peripheral.QuantityType(
+                        qt["id"],
+                        qt["physicalQuantity"],
+                        qt["physicalUnit"],
+                        physical_unit_symbol=qt["physicalUnitSymbol"] or None,
+                    ),
+                    quantity_types,
+                )
+            )
             self._configure(configuration)
             data_rx = self.peripheral_manager.data_receiver()
 

@@ -9,7 +9,6 @@ import collections
 
 from typing import Any, Optional, Union, Iterable, Dict, List, Callable, Awaitable
 
-
 logger = logging.getLogger("astroplant_kit.peripheral")
 
 
@@ -720,21 +719,11 @@ class PeripheralManager(object):
         self._data_tx = data_tx
         self._data_rx = data_rx
 
-    def set_quantity_types(self, quantity_types: Iterable[Dict[str, Any]]) -> None:
+    def set_quantity_types(self, quantity_types: Iterable[QuantityType]) -> None:
         """
         Set the quantity types known to the server.
         """
-        self.quantity_types = list(
-            map(
-                lambda qt: QuantityType(
-                    qt["id"],
-                    qt["physicalQuantity"],
-                    qt["physicalUnit"],
-                    physical_unit_symbol=qt["physicalUnitSymbol"] or None,
-                ),
-                quantity_types,
-            )
-        )
+        self.quantity_types = list(quantity_types)
 
     def data_receiver(self, buffer: int = 10) -> "trio.MemoryReceiveChannel[Data]":
         """

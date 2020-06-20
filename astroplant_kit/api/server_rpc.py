@@ -5,13 +5,23 @@ import json
 from .schema import astroplant_capnp
 from .errors import *
 
+from typing import Any, Optional, Dict, List
+from typing_extensions import TypedDict
+
 logger = logging.getLogger("astroplant_kit.api.server_rpc")
 
 
 REQUEST_TIMEOUT_SECONDS = 15
 
 
-def _if_error_response_raise_exception_(response):
+class QuantityType(TypedDict):
+    id: int
+    physicalQuantity: str
+    physicalUnit: str
+    physicalUnitSymbol: Optional[str]
+
+
+def _if_error_response_raise_exception(response):
     """
     Raise an exception if the response is an error response.
     """
@@ -97,7 +107,7 @@ class ServerRpc(object):
                         async with self._rpc_response_queue[id]:
                             del self._rpc_response_queue[id]
 
-    async def version(self):
+    async def version(self) -> str:
         """
         Request the version of the RPC server.
         """
@@ -110,13 +120,13 @@ class ServerRpc(object):
         except trio.EndOfChannel:
             raise ServerRpcRequestTimedOut()
 
-        _if_error_response_raise_exception_(response)
+        _if_error_response_raise_exception(response)
         if response.which() == "version":
             return response.version
         else:
             raise RpcInvalidResponse()
 
-    async def get_active_configuration(self):
+    async def get_active_configuration(self) -> Any:
         """
         Request the active configuration of this kit.
         """
@@ -129,7 +139,7 @@ class ServerRpc(object):
         except trio.EndOfChannel:
             raise ServerRpcRequestTimedOut()
 
-        _if_error_response_raise_exception_(response)
+        _if_error_response_raise_exception(response)
         if response.which() == "getActiveConfiguration":
             maybe_configuration = response.getActiveConfiguration
             if maybe_configuration.which() == "configuration":
@@ -139,7 +149,7 @@ class ServerRpc(object):
         else:
             raise RpcInvalidResponse()
 
-    async def get_quantity_types(self):
+    async def get_quantity_types(self) -> List[QuantityType]:
         """
         Request the quantity types known to the RPC server.
         """
@@ -152,7 +162,7 @@ class ServerRpc(object):
         except Exception as e:
             raise ServerRpcRequestTimedOut()
 
-        _if_error_response_raise_exception_(response)
+        _if_error_response_raise_exception(response)
         if response.which() == "getQuantityTypes":
             return json.loads(response.getQuantityTypes)
         else:
