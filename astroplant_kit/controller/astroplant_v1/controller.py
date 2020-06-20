@@ -428,7 +428,9 @@ class AstroplantControllerV1(Controller):
 
     def __init__(self, peripheral_manager: PeripheralManager, rules: Rules):
         super().__init__(peripheral_manager, rules)
-        fuzzy_control = rules["fuzzyControl"]
+        fuzzy_control = rules.get(
+            "fuzzyControl", {"input": {}, "output": {}, "rules": []}
+        )
 
         self._input = Input(fuzzy_control["input"])
         self._output = Output(fuzzy_control["output"])
