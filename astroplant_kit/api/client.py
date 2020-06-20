@@ -7,7 +7,10 @@ from io import BytesIO
 
 from .schema import astroplant_capnp
 from .server_rpc import ServerRpc
-from .kit_rpc import KitRpc
+from .kit_rpc import KitRpc, KitRpcHandler
+from ..peripheral import Measurement, AggregateMeasurement
+
+from typing import Any, Optional
 
 logger = logging.getLogger("astroplant_kit.api.client")
 
@@ -16,20 +19,18 @@ INITIAL_CONNECTION_WARNING_SECONDS = 10
 BETWEEN_CONNECTION_WARNING_SECONDS = 180
 
 
-class Client(object):
+class Client:
     """
     AstroPlant API Client class implementing methods to interact with the AstroPlant API.
     """
 
-    def __init__(self, host, port, keepalive=60, auth={}):
+    def __init__(self, host: str, port: int, keepalive: int = 60, auth: Any = {}):
         self.connected = False
 
-        message_sender, message_receiver = trio.open_memory_channel(0)
+        message_sender, message_receiver = trio.open_memory_channel[mqtt.MQTTMessage](0)
         self._message_sender = message_sender
         self._message_receiver = message_receiver
-        self._trio_token = None
-
-        self._kit_rpc_handler = None
+        self._trio_token: Optional[trio.hazmat.TrioToken] = None
 
         self._server_rpc = ServerRpc(self._server_rpc_request)
         self._kit_rpc = KitRpc(self._kit_rpc_response)
@@ -54,24 +55,24 @@ class Client(object):
         self._start_connection_time = time.time()
         self._mqtt_client.connect_async(host=host, port=port, keepalive=keepalive)
 
-    def register_kit_rpc_handler(self, kit_rpc_handler):
+    def register_kit_rpc_handler(self, kit_rpc_handler: KitRpcHandler) -> None:
         self._kit_rpc._register_handler(kit_rpc_handler)
 
-    def _server_rpc_request(self, payload):
+    def _server_rpc_request(self, payload: bytes) -> None:
         self._mqtt_client.publish(
             topic=f"kit/{self.serial}/server-rpc/request",
             payload=payload,
             qos=1,  # Deliver at least once.
         )
 
-    def _kit_rpc_response(self, payload):
+    def _kit_rpc_response(self, payload: bytes) -> None:
         self._mqtt_client.publish(
             topic=f"kit/{self.serial}/kit-rpc/response",
             payload=payload,
             qos=1,  # Deliver at least once.
         )
 
-    async def _watch_connection(self):
+    async def _watch_connection(self) -> None:
         warnings = 0
         while True:
             next_warn_at = (
@@ -87,7 +88,7 @@ class Client(object):
                 warnings += 1
             await trio.sleep(5)
 
-    async def run(self):
+    async def run(self) -> None:
         """
         Run the API client. Should only be called once.
         """
@@ -111,13 +112,13 @@ class Client(object):
                 self._mqtt_client.loop_stop()
 
     @property
-    def server_rpc(self):
+    def server_rpc(self) -> ServerRpc:
         """
         Get a handle to the server RPC.
         """
         return self._server_rpc
 
-    def _on_connect(self, client, user_data, flags, rc):
+    def _on_connect(self, client, user_data, flags, rc) -> None:
         """
         Handles (re)connections.
         """
@@ -126,7 +127,7 @@ class Client(object):
         self._mqtt_client.subscribe(f"kit/{self.serial}/kit-rpc/request", qos=1)
         self.connected = True
 
-    def _on_disconnect(self, client, user_data, rc):
+    def _on_disconnect(self, client, user_data, rc) -> None:
         """
         Handles disconnections.
         """
@@ -134,16 +135,18 @@ class Client(object):
         self.connected = False
         self._start_connection_time = time.time()
 
-    def _on_message(self, client, user_data, msg):
+    def _on_message(
+        self, client: mqtt.Client, user_data: Any, msg: mqtt.MQTTMessage
+    ) -> None:
         """
         Handles received messages.
         """
         logger.debug(f"MQTT received message: {msg}")
-        resp = trio.from_thread.run(
+        trio.from_thread.run(
             self._message_sender.send, msg, trio_token=self._trio_token
         )
 
-    async def _handle_message(self, message):
+    async def _handle_message(self, message: mqtt.MQTTMessage) -> None:
         """
         Handles received messages.
         """
@@ -153,7 +156,7 @@ class Client(object):
 
         topics = topic.split("/")
 
-        router = {
+        router: Any = {
             "server-rpc": {"response": self._server_rpc._on_response},
             "kit-rpc": {"request": self._kit_rpc._on_request},
         }
@@ -166,9 +169,9 @@ class Client(object):
                         await router(payload)
                         break
                 else:
-                    logger.warn("unknown MQTT route:", topics)
+                    logger.warn(f"unknown MQTT route: {topic}")
 
-    def publish_raw_measurement(self, measurement):
+    def publish_raw_measurement(self, measurement: Measurement):
         """
         Publish a (real-time) raw measurement.
         """
@@ -191,7 +194,7 @@ class Client(object):
             qos=0,  # Deliver at most once.
         )
 
-    def publish_aggregate_measurement(self, measurement):
+    def publish_aggregate_measurement(self, measurement: AggregateMeasurement):
         """
         Publish an aggregate measurement.
         """
