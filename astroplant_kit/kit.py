@@ -221,7 +221,11 @@ class Kit(object):
             self._configure(configuration)
             data_rx = self.peripheral_manager.data_receiver()
 
+            logger.debug("Starting peripheral manager.")
             nursery.start_soon(self.peripheral_manager.run)
-            nursery.start_soon(self._controller.run)
+            if self._controller is not None:
+                logger.debug("Starting controller.")
+                nursery.start_soon(self._controller.run)
+
             async for data in data_rx:
                 self.publish_data(data)
