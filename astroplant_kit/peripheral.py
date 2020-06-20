@@ -7,7 +7,19 @@ import uuid
 import trio
 import collections
 
-from typing import Any, Optional, Union, Iterable, Dict, List, Callable, Awaitable
+from typing import (
+    TypeVar,
+    Any,
+    Optional,
+    Union,
+    Iterable,
+    Dict,
+    List,
+    Callable,
+    Awaitable,
+)
+
+T = TypeVar("T")
 
 logger = logging.getLogger("astroplant_kit.peripheral")
 
@@ -518,15 +530,10 @@ class Display(Peripheral):
         """
         Listen to new measurements and handle them.
         """
-        async for data in self.manager.data_receiver():
-            measurement = data.measurement
-            if measurement is not None:
-                self._measurements[
-                    (
-                        measurement.peripheral,
-                        measurement.quantity_type.physical_quantity,
-                    )
-                ] = measurement
+        async for measurement in self.manager.measurement_receiver():
+            self._measurements[
+                (measurement.peripheral, measurement.quantity_type.physical_quantity,)
+            ] = measurement
 
     async def run(self) -> None:
         idx = 0
@@ -652,10 +659,8 @@ class LocalDataLogger(Actuator):
         """
         Listen to new aggregate measurements and store them.
         """
-        async for data in self.manager.data_receiver():
-            aggregate_measurement = data.aggregate_measurement
-            if aggregate_measurement is not None:
-                self._store_aggregate_measurement(aggregate_measurement)
+        async for aggregate_measurement in self.manager.aggregate_measurement_receiver():
+            self._store_aggregate_measurement(aggregate_measurement)
 
     def _store_aggregate_measurement(
         self, aggregate_measurement: AggregateMeasurement
@@ -699,6 +704,9 @@ class LocalDataLogger(Actuator):
             writer.writerow(aggregate_measurement_dict)
 
 
+DataFilterMap = Callable[[Data], Optional[T]]
+
+
 class PeripheralManager(object):
     """
     A peripheral device manager; this manager keeps track of all peripherals,
@@ -711,7 +719,7 @@ class PeripheralManager(object):
         self._peripherals: Dict[str, Peripheral] = {}
         self._peripheral_control_locks: Dict[Peripheral, PeripheralControl] = {}
         self._debug_display: Peripheral = None
-        self._data_txs: List[trio.MemorySendChannel[Data]] = []
+        self._data_txs: List[Tuple[trio.MemorySendChannel, DataFilterMap]] = []
         self.event_loop = None
         self.quantity_types: List[QuantityType] = []
 
@@ -725,17 +733,47 @@ class PeripheralManager(object):
         """
         self.quantity_types = list(quantity_types)
 
-    def data_receiver(self, buffer: int = 10) -> "trio.MemoryReceiveChannel[Data]":
+    def _receiver(
+        self, filter_map: DataFilterMap[T], buffer: int = 10,
+    ) -> "trio.MemoryReceiveChannel[T]":
         """
         Create and get a data receiver channel.
 
         If the receiver does not keep up with the messages, the channel will
         be dropped.
         """
-        tx, rx = trio.open_memory_channel[Data](buffer)
-        self._data_txs.append(tx)
+        tx, rx = trio.open_memory_channel[T](buffer)
+        self._data_txs.append((tx, filter_map))
 
         return rx
+
+    def measurement_receiver(
+        self, buffer: int = 10
+    ) -> "trio.MemoryReceiveChannel[Measurement]":
+        def filter_map(d: Data) -> Optional[Measurement]:
+            return d.measurement
+
+        return self._receiver(filter_map, buffer)
+
+    def aggregate_measurement_receiver(
+        self, buffer: int = 10
+    ) -> "trio.MemoryReceiveChannel[AggregateMeasurement]":
+        def filter_map(d: Data) -> Optional[AggregateMeasurement]:
+            return d.aggregate_measurement
+
+        return self._receiver(filter_map, buffer)
+
+    def media_receiver(self, buffer: int = 10) -> "trio.MemoryReceiveChannel[Media]":
+        def filter_map(d: Data) -> Optional[Media]:
+            return d.media
+
+        return self._receiver(filter_map, buffer)
+
+    def data_receiver(self, buffer: int = 10) -> "trio.MemoryReceiveChannel[Data]":
+        def filter_map(d: Data) -> Data:
+            return d
+
+        return self._receiver(filter_map, buffer)
 
     def _get_quantity_type(
         self, physical_quantity: str, physical_unit: str
@@ -858,9 +896,12 @@ class PeripheralManager(object):
         :param data: The data to broadcast.
         """
         for i in reversed(range(len(self._data_txs))):
-            tx = self._data_txs[i]
+            (tx, filter_map) = self._data_txs[i]
+            d = filter_map(data)
+            if d is None:
+                continue
             try:
-                tx.send_nowait(data)
+                tx.send_nowait(d)
             except (trio.WouldBlock, trio.EndOfChannel):
                 await tx.aclose()
                 del self._data_txs[i]
