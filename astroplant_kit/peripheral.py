@@ -13,14 +13,34 @@ from typing import Any, Optional, Union, Iterable, Dict, List, Callable, Awaitab
 logger = logging.getLogger("astroplant_kit.peripheral")
 
 
+class Media(object):
+    """
+    A media object.
+    """
+
+    def __init__(
+        self,
+        peripheral: "Peripheral",
+        name: str,
+        type: str,
+        data: bytes,
+        metadata: Any,
+        datetime: dt.datetime,
+    ):
+        self.id = uuid.uuid4()
+        self.datetime = datetime
+        self.peripheral = peripheral
+        self.name = name
+        self.type = type
+        self.data = data
+        self.metadata = metadata
+        self.datetime = datetime
+
+
 class PeripheralCommandResult(
-    collections.namedtuple(
-        "PeripheralCommandResult", ["media_type", "data", "metadata"]
-    )
+    collections.namedtuple("PeripheralCommandResult", ["media"])
 ):
-    media_type: str
-    data: bytes
-    metadata: Dict
+    media: Optional[Media]
 
 
 class Measurement(object):
@@ -108,6 +128,23 @@ class Peripheral:
         self._publish_handle: Optional[
             Callable[[RawOrAggregateMeasurement], Awaitable[None]]
         ] = None
+
+    def create_media(
+        self,
+        name: str,
+        type: str,
+        data: bytes,
+        metadata: Any,
+        datetime: Optional[dt.datetime] = None,
+    ) -> Media:
+        return Media(
+            self,
+            name,
+            type,
+            data,
+            metadata,
+            datetime=datetime or dt.datetime.now(dt.timezone.utc),
+        )
 
     @abc.abstractmethod
     async def run(self):

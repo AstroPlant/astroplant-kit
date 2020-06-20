@@ -71,14 +71,19 @@ class KitRpc(object):
                 if result is None:
                     peripheral_command_response = astroplant_capnp.KitRpcResponse.PeripheralCommand.new_message(
                         mediaType="text/plain",
-                        data=b"ok",
+                        data=b"error",
                         metadata=json.dumps(None),
                     )
-                else:
+                elif result.media is None:
                     peripheral_command_response = astroplant_capnp.KitRpcResponse.PeripheralCommand.new_message(
-                        mediaType=result.media_type,
-                        data=result.data,
-                        metadata=json.dumps(result.metadata),
+                        mediaType="text/plain", data=b"ok", metadata=json.dumps(None),
+                    )
+                else:
+                    media = result.media
+                    peripheral_command_response = astroplant_capnp.KitRpcResponse.PeripheralCommand.new_message(
+                        mediaType=media.type,
+                        data=media.data,
+                        metadata=json.dumps(media.metadata),
                     )
                 response.peripheralCommand = peripheral_command_response
             except:

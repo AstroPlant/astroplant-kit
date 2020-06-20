@@ -180,7 +180,8 @@ class Setpoints:
 
 class Input:
     def __init__(
-        self, input_settings: Dict[PeripheralName, Dict[QuantityTypeIdStr, InputSettings]],
+        self,
+        input_settings: Dict[PeripheralName, Dict[QuantityTypeIdStr, InputSettings]],
     ):
         self._shapes: Dict[InputFuzzySet, Shape] = {}
         self._error_transforms: Dict[
