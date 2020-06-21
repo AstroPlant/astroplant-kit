@@ -215,6 +215,12 @@ class Peripheral:
         """
         self._publish_handle = publish_handle
 
+    async def _publish_data(self, data: Data) -> None:
+        if self._publish_handle is None:
+            raise Exception("Publish handle not set.")
+
+        await self._publish_handle(data)
+
     def __str__(self) -> str:
         return self.name
 
@@ -343,12 +349,6 @@ class Sensor(Peripheral):
     @abc.abstractmethod
     async def measure(self) -> "Union[Measurement, Iterable[Measurement]]":
         raise NotImplementedError()
-
-    async def _publish_data(self, data: Data) -> None:
-        if self._publish_handle is None:
-            raise Exception("Publish handle not set.")
-
-        await self._publish_handle(data)
 
     def reduce(
         self,
