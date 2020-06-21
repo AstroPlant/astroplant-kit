@@ -110,7 +110,7 @@ class Media:
 
 
 class PeripheralCommandResult(
-    collections.namedtuple("PeripheralCommandResult", ["media"])
+    collections.namedtuple("PeripheralCommandResult", ["media"], defaults=[None])
 ):
     media: Optional[Media]
 
