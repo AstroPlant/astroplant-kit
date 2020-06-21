@@ -75,13 +75,7 @@ class KitRpc(object):
                     request.peripheralCommand.peripheral,
                     json.loads(request.peripheralCommand.command),
                 )
-                if result is None:
-                    peripheral_command_response = astroplant_capnp.KitRpcResponse.PeripheralCommand.new_message(
-                        mediaType="text/plain",
-                        data=b"error",
-                        metadata=json.dumps(None),
-                    )
-                elif result.media is None:
+                if result is None or result.media is None:
                     peripheral_command_response = astroplant_capnp.KitRpcResponse.PeripheralCommand.new_message(
                         mediaType="text/plain", data=b"ok", metadata=json.dumps(None),
                     )
@@ -93,9 +87,13 @@ class KitRpc(object):
                         metadata=json.dumps(media.metadata),
                     )
                 response.peripheralCommand = peripheral_command_response
-            except:
-                error = astroplant_capnp.RpcError.new_message(other=None)
-                response.error = error
+            except Exception as e:
+                peripheral_command_response = astroplant_capnp.KitRpcResponse.PeripheralCommand.new_message(
+                    mediaType="text/plain",
+                    data=f"Error: {e}".encode(),
+                    metadata=json.dumps(None),
+                )
+                response.peripheralCommand = peripheral_command_response
         elif which == "peripheralCommandLock":
             response.peripheralCommandLock = await rpc.peripheral_command_lock(
                 request.peripheralCommandLock.peripheral

@@ -8,7 +8,7 @@ from io import BytesIO
 from .schema import astroplant_capnp
 from .server_rpc import ServerRpc
 from .kit_rpc import KitRpc, KitRpcHandler
-from ..peripheral import Measurement, AggregateMeasurement
+from ..peripheral import Measurement, AggregateMeasurement, Media
 
 from typing import Any, Optional, Dict
 
@@ -223,4 +223,28 @@ class Client:
             topic=f"kit/{self.serial}/measurement/aggregate",
             payload=aggregate_measurement_msg.to_bytes_packed(),
             qos=2,  # Deliver exactly once. Maybe downgrade to `1`: deliver at least once.
+        )
+
+    def publish_media(self, media: Media):
+        """
+        Publish media.
+        """
+        logger.debug(
+            f"Sending media: {media.peripheral.name}: {media.name} ({media.type}) {len(media.data)} byte(s)"
+        )
+
+        media_msg = astroplant_capnp.Media.new_message(
+            id=media.id.bytes,
+            datetime=round(media.datetime.timestamp() * 1000),
+            peripheral=media.peripheral.get_id(),
+            name=media.name,
+            type=media.type,
+            data=media.data,
+            metadata=json.dumps(media.metadata),
+        )
+
+        self._mqtt_client.publish(
+            topic=f"kit/{self.serial}/media",
+            payload=media_msg.to_bytes_packed(),
+            qos=1,  # Deliver at least once.
         )

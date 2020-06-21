@@ -24,6 +24,16 @@ struct AggregateMeasurement {
   }
 }
 
+struct Media {
+  id @0 :Data;
+  datetime @1 :UInt64;
+  peripheral @2 :Int32;
+  name @3: Text;
+  type @4 :Text;
+  data @5 :Data;
+  metadata @6 :Text;
+}
+
 struct RpcError {
   union {
     other @0 :Void;

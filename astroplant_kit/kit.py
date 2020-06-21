@@ -157,6 +157,9 @@ class Kit(object):
         elif data.is_aggregate_measurement():
             assert data.aggregate_measurement is not None
             self.api_client.publish_aggregate_measurement(data.aggregate_measurement)
+        elif data.is_media():
+            assert data.media is not None
+            self.api_client.publish_media(data.media)
 
     async def run(self) -> None:
         """
