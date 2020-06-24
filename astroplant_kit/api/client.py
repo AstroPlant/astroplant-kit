@@ -43,7 +43,6 @@ class Client:
 
         if auth:
             self.serial = auth["serial"]
-            logger.warn("TODO FIX username")
             self._mqtt_client.username_pw_set(
                 username=auth["username"] if "username" in auth else auth["serial"],
                 password=auth["secret"],
