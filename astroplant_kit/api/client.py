@@ -123,16 +123,27 @@ class Client:
         """
         Handles (re)connections.
         """
-        logger.info("Connected to MQTT broker.")
-        self._mqtt_client.subscribe(f"kit/{self.serial}/server-rpc/response", qos=1)
-        self._mqtt_client.subscribe(f"kit/{self.serial}/kit-rpc/request", qos=1)
-        self.connected = True
+        if rc is mqtt.MQTT_ERR_SUCCESS:
+            logger.info("Connected to MQTT broker.")
+            self._mqtt_client.subscribe(f"kit/{self.serial}/server-rpc/response", qos=1)
+            self._mqtt_client.subscribe(f"kit/{self.serial}/kit-rpc/request", qos=1)
+            self.connected = True
+        elif rc is mqtt.MQTT_ERR_CONN_REFUSED:
+            logger.info(
+                "MQTT broker connection refused. Please check your authentication details."
+            )
+        else:
+            logger.info(f"MQTT broker connection issue: {rc}.")
 
     def _on_disconnect(self, client: mqtt.Client, user_data: Any, rc: int) -> None:
         """
         Handles disconnections.
         """
-        logger.info("Disconnected from MQTT broker.")
+        if rc is mqtt.MQTT_ERR_SUCCESS:
+            logger.info(f"Disconnected from MQTT broker.")
+        else:
+            logger.info(f"Disconnected from MQTT broker: code {rc}.")
+
         self.connected = False
         self._start_connection_time = time.time()
 
