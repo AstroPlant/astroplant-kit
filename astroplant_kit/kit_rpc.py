@@ -1,11 +1,9 @@
 import logging
-import asyncio
 import astroplant_kit
 import astroplant_kit.api
 
-logger = logging.getLogger("astroplant_kit.kit_rpc")
 
-from .peripheral import PeripheralCommandResult
+logger = logging.getLogger("astroplant_kit.kit_rpc")
 
 
 class KitRpc(astroplant_kit.api.KitRpcHandler):
@@ -66,5 +64,3 @@ class KitRpc(astroplant_kit.api.KitRpcHandler):
             del self._peripheral_locks[peripheral]
             lock.release()
             return True
-
-        # return PeripheralCommandResult("text/plain", bytes(f"received command {command} for peripheral {peripheral}", "utf8"), None)

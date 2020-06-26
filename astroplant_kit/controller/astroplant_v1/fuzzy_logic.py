@@ -4,23 +4,16 @@ A rough implementation of fuzzy logic.
 
 import logging
 import abc
-import trio
-import math
-from collections import namedtuple
 
 from typing import (
     NewType,
     TypeVar,
     Any,
-    Optional,
     Iterable,
     Callable,
-    Dict,
     List,
-    Set,
     Tuple,
 )
-from typing_extensions import TypedDict
 
 logger = logging.getLogger("astroplant_kit.controller.astroplant_v1")
 

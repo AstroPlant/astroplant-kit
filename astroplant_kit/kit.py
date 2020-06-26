@@ -3,18 +3,8 @@ Contains the main kit routines.
 """
 
 # Make sure astroplant_kit is in the path
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/.."))
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-
 import datetime
-import signal
-import functools
 import trio
-import threading
-import time
 import importlib
 import logging
 from astroplant_kit import peripheral
@@ -205,7 +195,7 @@ class Kit(object):
                     return
 
             if configuration is None:
-                logger.error(f"No configuration set. Exiting.")
+                logger.error("No configuration set. Exiting.")
                 raise errors.NoConfigurationError()
 
             try:

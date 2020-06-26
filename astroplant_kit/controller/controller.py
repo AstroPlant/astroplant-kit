@@ -3,7 +3,7 @@ Specifies the abstract kit controller, a base class to be extended, intended to
 link sensors and actuators together.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 import abc
 from ..peripheral import PeripheralManager
 

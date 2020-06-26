@@ -1,20 +1,18 @@
 import logging
 import trio
-import math
 from datetime import datetime, time
 
 from enum import Enum
 from typing import NewType, Optional, Iterable, Callable, Dict, List, Set, Tuple
 from typing_extensions import TypedDict
 
-from ...peripheral import PeripheralManager, Peripheral, Measurement
+from ...peripheral import PeripheralManager, Measurement
 from ..controller import Controller
 from .fuzzy_logic import (
     FUZZY_TRUE,
     FUZZY_FALSE,
     Fuzzy,
     Shape,
-    Singleton,
     Triangle,
     And,
     Or,
