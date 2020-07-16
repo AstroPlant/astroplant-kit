@@ -5,7 +5,7 @@ The AstroPlant kits communicate with the AstroPlant [back-end](https://github.co
 
 # Documentation
 
-Full documentation can be found [here](https://astroplant-kit.readthedocs.io/en/latest/index.html).
+Full documentation can be found [here](https://astroplant.gitbook.io/developers/).
 
 # Install the kit
 
