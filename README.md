@@ -12,7 +12,7 @@ Full documentation can be found [here](https://astroplant.gitbook.io/developers/
 To install the kit through setuptools, run
 
 ```bash
-$ python setup.py install
+$ python3 setup.py install
 ```
 
 This installs the AstroPlant kit on your system, allowing you to use the AstroPlant kit CLI through:
@@ -26,7 +26,7 @@ $ astroplant-kit --help
 To install the kit dependencies through pip, run
 
 ```bash
-$ pip3 install -r requirements.txt
+$ python3 -m pip install -r requirements.txt
 ```
 
 This allows you to use the AstroPlant kit CLI through:
