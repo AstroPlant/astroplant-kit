@@ -77,7 +77,7 @@ class InputSettings(TypedDict):
     nominalDeltaRange: float
     deltaMeasurements: int
     setpoints: List[Setpoint]
-    interpolation: int
+    interpolated: bool
 
 
 class OutputSettingsContinuous(TypedDict):
@@ -162,11 +162,11 @@ def seconds_between_times(time1: time, time2: time) -> int:
 
 class Setpoints:
     def __init__(
-        self, setpoints: List[Setpoint], interpolation: int,
+        self, setpoints: List[Setpoint], interpolated: bool,
     ):
         self._setpoints: Dict[time, float] = {}
         self._times: List[time] = []
-        self._interpolation = interpolation
+        self._interpolated = interpolated
 
         for setpoint in setpoints:
             t = time.fromisoformat(setpoint["time"])
@@ -181,17 +181,16 @@ class Setpoints:
                 current_time = setpoint_time
                 next_time = self._times[(idx + 1) % len(self._times)]
 
-        time_diff = seconds_between_times(current_time, next_time)
+        entry_time_diff = seconds_between_times(current_time, next_time)
+        time_elapsed_from_current = seconds_between_times(current_time, t)
 
         current_setpoint = self._setpoints[current_time]
         next_setpoint = self._setpoints[next_time]
-        if (
-            time_diff < self._interpolation
-            and current_setpoint is not None
-            and next_setpoint is not None
-        ):
+        if self._interpolated:
             current_setpoint += (
-                (next_setpoint - current_setpoint) / self._interpolation * time_diff
+                (next_setpoint - current_setpoint)
+                / entry_time_diff
+                * time_elapsed_from_current
             )
         return current_setpoint
 
@@ -236,7 +235,7 @@ class Input:
             for (quantity_type_str, settings) in qt_input_settings.items():
                 quantity_type = int(quantity_type_str)
                 self._setpoints[(peripheral, quantity_type)] = Setpoints(
-                    settings["setpoints"], settings["interpolation"]
+                    settings["setpoints"], settings["interpolated"]
                 )
 
                 for (n, fuzzy_var) in enumerate(InputFuzzySet):
