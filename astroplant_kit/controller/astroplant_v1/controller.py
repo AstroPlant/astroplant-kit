@@ -706,7 +706,7 @@ class AstroplantControllerV1(Controller):
                     if value != self._current_command_value.get((peripheral, command)):
                         self._current_command_value[(peripheral, command)] = value
                         nursery.start_soon(self._do_command, peripheral, command)
-                await trio.sleep(1.0)
+                await trio.sleep(0.5)
 
     async def run(self) -> None:
         """
