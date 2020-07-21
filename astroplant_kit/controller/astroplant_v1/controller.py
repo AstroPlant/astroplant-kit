@@ -149,9 +149,13 @@ class Rules(TypedDict):
     fuzzyControl: FuzzyControlRules
 
 
-def seconds_between_times(time1: time, time2: time) -> int:
+def seconds_between_times(time1: time, time2: time) -> float:
     """Get the difference in seconds between two times."""
-    diff = (time2.minute - time1.minute) * 60 + time2.second - time1.second
+    diff = (
+        (time2.minute - time1.minute) * 60
+        + (time2.second - time1.second)
+        + (time2.microsecond - time1.microsecond) / 1000000
+    )
     if time1 < time2:
         diff += (time2.hour - time1.hour) * 60 * 60
     else:
