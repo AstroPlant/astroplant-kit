@@ -164,6 +164,8 @@ class Setpoints:
     def __init__(
         self, setpoints: List[Setpoint], interpolated: bool,
     ):
+        assert len(setpoints) > 0
+
         self._setpoints: Dict[time, float] = {}
         self._times: List[time] = []
         self._interpolated = interpolated
@@ -195,87 +197,131 @@ class Setpoints:
         return current_setpoint
 
 
+TRIANGLE_HALF_WIDTH = 2.0 / 5
+SHAPES: Dict[InputFuzzySet, Shape] = {}
+
+for (n, fuzzy_var) in enumerate(InputFuzzySet):
+    triangle_offset = 2.0 * n / (len(InputFuzzySet) - 1)
+    SHAPES[fuzzy_var] = Triangle(-1.0 + triangle_offset, TRIANGLE_HALF_WIDTH)
+
+
+def _transform_builder(nominal_range: float) -> Callable[[float], float]:
+    """Creates a transformer, mapping inputs to lie between -1.0 and 1.0."""
+    half_range = nominal_range / TRIANGLE_HALF_WIDTH
+    left_range = -half_range
+    right_range = half_range
+
+    def transform(error: float) -> float:
+        if error <= left_range:
+            return -1.0
+        elif error >= right_range:
+            return 1.0
+        else:
+            return error / half_range
+
+    return transform
+
+
+class InputType(Enum):
+    ERROR = 1
+    DELTA = 2
+
+
 class Input:
+    class _MeasurementHandler:
+        def __init__(self, input_settings: InputSettings):
+            assert input_settings["nominalRange"] > 0.0
+            assert input_settings["nominalDeltaRange"] > 0.0
+            assert input_settings["deltaMeasurements"] >= 1
+
+            self._error_transform: Callable[[float], float] = _transform_builder(
+                input_settings["nominalRange"]
+            )
+            self._delta_transform: Callable[[float], float] = _transform_builder(
+                input_settings["nominalDeltaRange"]
+            )
+            self._delta_measurements: int = input_settings["deltaMeasurements"]
+
+            self.membership_values: Dict[InputFuzzySet, Optional[Fuzzy]] = {}
+            self.delta_membership_values: Dict[InputFuzzySet, Optional[Fuzzy]] = {}
+            self._measurements: List[Measurement] = []
+
+            self._setpoints: Setpoints = Setpoints(
+                input_settings["setpoints"], input_settings["interpolated"]
+            )
+
+            for (n, fuzzy_var) in enumerate(InputFuzzySet):
+                self.membership_values[fuzzy_var] = None
+                self.delta_membership_values[fuzzy_var] = None
+
+        def update(
+            self, measurement: Measurement
+        ) -> Set[Tuple[InputType, InputFuzzySet]]:
+            t = datetime.now().time()
+            changed = set()
+
+            self._measurements.append(measurement)
+            num_measurements = len(self._measurements)
+            if num_measurements >= self._delta_measurements + 1:
+                if num_measurements > self._delta_measurements + 1:
+                    self._measurements.pop(0)
+
+                delta = self._delta_transform(
+                    self._measurements[-1].value - self._measurements[0].value
+                )
+
+                for fuzzy_var in InputFuzzySet:
+                    old_value = self.delta_membership_values[fuzzy_var]
+                    self.delta_membership_values[fuzzy_var] = SHAPES[fuzzy_var].fuzzify(
+                        delta
+                    )
+                    if old_value != self.delta_membership_values[fuzzy_var]:
+                        changed.add((InputType.DELTA, fuzzy_var))
+
+            setpoint = self._setpoints.for_time(t)
+            error = self._error_transform(measurement.value - setpoint)
+
+            for fuzzy_var in InputFuzzySet:
+                old_value = self.membership_values[fuzzy_var]
+                self.membership_values[fuzzy_var] = SHAPES[fuzzy_var].fuzzify(error)
+                if old_value != self.membership_values[fuzzy_var]:
+                    changed.add((InputType.ERROR, fuzzy_var))
+
+            return changed
+
     def __init__(
         self,
         input_settings: Dict[PeripheralName, Dict[QuantityTypeIdStr, InputSettings]],
     ):
-        self._shapes: Dict[InputFuzzySet, Shape] = {}
-        self._error_transforms: Dict[
-            Tuple[PeripheralName, QuantityTypeId], Callable[[float], float]
+        self._handlers: Dict[
+            Tuple[PeripheralName, QuantityTypeId], Input._MeasurementHandler
         ] = {}
-        self._membership_values: Dict[
-            Tuple[PeripheralName, QuantityTypeId, InputFuzzySet], Optional[Fuzzy]
-        ] = {}
-        self._setpoints: Dict[Tuple[PeripheralName, QuantityTypeId], Setpoints] = {}
-
-        triangle_half_width = 2.0 / 5
-        for (n, fuzzy_var) in enumerate(InputFuzzySet):
-            triangle_offset = 2.0 * n / (len(InputFuzzySet) - 1)
-            self._shapes[fuzzy_var] = Triangle(
-                -1.0 + triangle_offset, triangle_half_width
-            )
-
-        def error_transform(input_settings: InputSettings) -> Callable[[float], float]:
-            half_range = input_settings["nominalRange"] / triangle_half_width
-            left_range = -half_range
-            right_range = half_range
-
-            def transform(error: float) -> float:
-                if error <= left_range:
-                    return -1.0
-                elif error >= right_range:
-                    return 1.0
-                else:
-                    return error / half_range
-
-            return transform
 
         for (peripheral, qt_input_settings) in input_settings.items():
             for (quantity_type_str, settings) in qt_input_settings.items():
                 quantity_type = int(quantity_type_str)
-                self._setpoints[(peripheral, quantity_type)] = Setpoints(
-                    settings["setpoints"], settings["interpolated"]
+                self._handlers[(peripheral, quantity_type)] = Input._MeasurementHandler(
+                    settings
                 )
-
-                for (n, fuzzy_var) in enumerate(InputFuzzySet):
-                    self._error_transforms[
-                        (peripheral, quantity_type)
-                    ] = error_transform(settings)
-                    self._membership_values[
-                        (peripheral, quantity_type, fuzzy_var)
-                    ] = None
 
     def update(
         self, measurement: Measurement
-    ) -> Set[Tuple[PeripheralName, QuantityTypeId, InputFuzzySet]]:
+    ) -> Set[Tuple[PeripheralName, QuantityTypeId, InputType, InputFuzzySet]]:
         """
         :returns: A set of memberships that were changed by the update.
         """
         p = measurement.peripheral
         qt = measurement.quantity_type
-        if (p.name, qt.id) not in self._setpoints:
+        if (p.name, qt.id) not in self._handlers:
             return set()
 
-        t = datetime.now().time()
-        changed = set()
-
-        setpoint = self._setpoints[(p.name, qt.id)].for_time(t)
-        error = self._error_transforms[(p.name, qt.id)](measurement.value - setpoint)
-
-        logger.debug(
-            f"setpoint for {p.name} {qt.physical_quantity} {qt.physical_unit}: {setpoint} - current error: {error}"
+        handler = self._handlers[(p.name, qt.id)]
+        return set(
+            map(
+                lambda change: (p.name, qt.id, change[0], change[1]),
+                handler.update(measurement),
+            )
         )
-
-        for fuzzy_var in InputFuzzySet:
-            old_value = self._membership_values[(p.name, qt.id, fuzzy_var)]
-            self._membership_values[(p.name, qt.id, fuzzy_var)] = self._shapes[
-                fuzzy_var
-            ].fuzzify(error)
-            if old_value != self._membership_values[(p.name, qt.id, fuzzy_var)]:
-                changed.add((p.name, qt.id, fuzzy_var))
-
-        return changed
 
     def membership_value(
         self,
@@ -283,7 +329,17 @@ class Input:
         quantity_type: QuantityTypeId,
         fuzzy_var: InputFuzzySet,
     ) -> Optional[Fuzzy]:
-        return self._membership_values[(peripheral, quantity_type, fuzzy_var)]
+        return self._handlers[(peripheral, quantity_type)].membership_values[fuzzy_var]
+
+    def delta_membership_value(
+        self,
+        peripheral: PeripheralName,
+        quantity_type: QuantityTypeId,
+        fuzzy_var: InputFuzzySet,
+    ) -> Optional[Fuzzy]:
+        return self._handlers[(peripheral, quantity_type)].delta_membership_values[
+            fuzzy_var
+        ]
 
 
 class OutputSchedule:
@@ -479,15 +535,16 @@ class Evaluator:
             hedge = condition.get("hedge", None)
             self.hedge = None if hedge is None else Hedge(hedge)
 
-            if self.delta:
-                raise NotImplementedError("Deltas are not yet implemented")
-
         def evaluate(self, input: Input) -> Fuzzy:
-            assert not self.delta
-
-            truth = input.membership_value(
-                self.peripheral, self.quantity_type, self.fuzzy_var
-            )
+            truth = None
+            if self.delta:
+                truth = input.delta_membership_value(
+                    self.peripheral, self.quantity_type, self.fuzzy_var
+                )
+            else:
+                truth = input.membership_value(
+                    self.peripheral, self.quantity_type, self.fuzzy_var
+                )
 
             if truth is None:
                 return FUZZY_FALSE
@@ -529,7 +586,9 @@ class Evaluator:
 
     def process(
         self,
-        changed_inputs: Set[Tuple[PeripheralName, QuantityTypeId, InputFuzzySet]],
+        changed_inputs: Set[
+            Tuple[PeripheralName, QuantityTypeId, InputType, InputFuzzySet]
+        ],
         now: time,
     ) -> Set[Tuple[PeripheralName, CommandName]]:
         affected_commands = set()
@@ -544,7 +603,12 @@ class Evaluator:
         for rule in self._rules:
             evaluate = any(
                 map(
-                    lambda c: (c.peripheral, c.quantity_type, c.fuzzy_var)
+                    lambda c: (
+                        c.peripheral,
+                        c.quantity_type,
+                        InputType.DELTA if c.delta else InputType.ERROR,
+                        c.fuzzy_var,
+                    )
                     in changed_inputs,
                     rule.condition,
                 )
