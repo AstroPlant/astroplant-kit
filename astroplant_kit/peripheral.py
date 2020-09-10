@@ -294,14 +294,12 @@ class Sensor(Peripheral):
                 # Add all measurements to the sensor's measurement list (for later reduction)
                 self.measurements.extend(measurement)
 
-                # Publish each measurement
                 for m in measurement:
                     await self._publish_data(Data(m))
             else:
                 # Add measurement to the sensor's measurement list (for later reduction)
                 self.measurements.append(measurement)
 
-                # Publish the measurement
                 await self._publish_data(Data(measurement))
             await trio.sleep(self.measurement_interval)
 
@@ -325,8 +323,6 @@ class Sensor(Peripheral):
                         measurement.quantity_type.physical_unit,
                     )
                 ].append(measurement)
-
-            # Empty the list
             self.measurements = []
 
             end_datetime = dt.datetime.now(dt.timezone.utc)
@@ -337,7 +333,6 @@ class Sensor(Peripheral):
                     self.reduce(val, start_datetime, end_datetime)
                     for (_, val) in grouped_measurements.items()
                 ]
-
             except Exception as e:
                 self.logger.error("Could not reduce measurements: %s" % e)
                 return
@@ -393,7 +388,7 @@ class Actuator(Peripheral):
 class PeripheralControl(object):
     """
     A peripheral control object.
-    
+
     Used to give exclusive control access over a peripheral device.
 
     Can be used with the given methods, or as an async context manager. On lock
@@ -685,10 +680,7 @@ class LocalDataLogger(Actuator):
         )
         path = os.path.join(self.storage_path, file_name)
 
-        # Check whether the file exists.
-        exists = os.path.isfile(path)
-
-        # Create file and directories if it does not exist yet.
+        file_exists = os.path.isfile(path)
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         with open(path, "a", newline="") as csv_file:
@@ -698,7 +690,7 @@ class LocalDataLogger(Actuator):
             field_names = sorted(aggregate_measurement_dict.keys())
             writer = csv.DictWriter(csv_file, fieldnames=field_names)
 
-            if not exists:
+            if not file_exists:
                 # File is new: write csv header.
                 writer.writeheader()
             writer.writerow(aggregate_measurement_dict)
