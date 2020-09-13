@@ -112,8 +112,8 @@ class KitRpc(object):
 
         try:
             request = astroplant_capnp.KitRpcRequest.from_bytes_packed(data)
-        except:
-            logger.warn("received malformed RPC request")
+        except Exception as e:
+            logger.warn(f"received malformed RPC request: {e}")
             return
 
         await self._handle_request(request)
