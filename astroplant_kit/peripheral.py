@@ -994,8 +994,6 @@ class PeripheralManager(object):
             async with trio.open_nursery() as nursery:
                 for peripheral in self.peripherals:
                     nursery.start_soon(self._clean_up_peripheral, peripheral)
-        except BaseException as e:
-            logger.info("exception {}", e)
         finally:
             logger.info("Peripheral cleanup complete.")
 
