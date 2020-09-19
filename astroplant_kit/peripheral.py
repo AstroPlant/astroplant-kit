@@ -154,6 +154,10 @@ class Peripheral:
     Abstract peripheral device base class.
     """
 
+    #: Cleanup timeout in seconds. If clean_up runs longer than this, it will
+    #: be cancelled.
+    CLEANUP_TIMEOUT = 30.0
+
     #: Boolean indicating whether the peripheral is runnable.
     RUNNABLE = False
 
@@ -185,6 +189,22 @@ class Peripheral:
             metadata,
             datetime=datetime or dt.datetime.now(dt.timezone.utc),
         )
+
+    async def set_up(self) -> None:
+        """
+        Asynchronously perform the peripheral device's setup routine.
+        This is guaranteed to be called and is run to completion before `run`
+        or `do` are called.
+        """
+        pass
+
+    async def clean_up(self) -> None:
+        """
+        Asynchronously perform the peripheral device's cleanup routine.
+        This is guaranteed to be called only after `set_up`, `run` and `do` are
+        stopped or cancelled.
+        """
+        pass
 
     @abc.abstractmethod
     async def run(self) -> None:
@@ -856,10 +876,65 @@ class PeripheralManager(object):
 
     async def run_debug_display(self) -> None:
         """
-        Run the debug display device.
+        Run the debug display device. Also runs its setup.
         """
         if self._debug_display:
+            logger.info("Setting up debug display.")
+            await self._debug_display.set_up()
+            logger.info("Debug display set up complete.")
             await self._debug_display.run()
+
+    async def clean_up_debug_display(self) -> None:
+        """
+        Clean up the debug display device.
+        """
+        if self._debug_display:
+            with trio.move_on_after(
+                self._debug_display.CLEANUP_TIMEOUT
+            ) as cancel_scope:
+                cancel_scope.shield = True
+                logger.info("Cleaning up debug display.")
+                await self._debug_display.clean_up()
+                logger.info("Debug display clean up complete.")
+        if cancel_scope.cancelled_caught:
+            logger.warning("Peripheral cleanup routine timed out for debug display.")
+
+    async def set_up(self) -> None:
+        """
+        Set up all peripherals.
+        """
+        logger.info(f"Setting up {len(self.peripherals)} peripheral(s).")
+        async with trio.open_nursery() as nursery:
+            for peripheral in self.peripherals:
+                nursery.start_soon(peripheral.set_up)
+        logger.info("Peripheral setup complete.")
+
+    async def _clean_up_peripheral(self, peripheral: Peripheral) -> None:
+        """
+        Run a peripheral's clean up routine in a timeout scope.
+        Prevent the clean up from being cancelled by other means.
+        """
+        with trio.move_on_after(peripheral.CLEANUP_TIMEOUT) as cancel_scope:
+            cancel_scope.shield = True
+            await peripheral.clean_up()
+        if cancel_scope.cancelled_caught:
+            logger.warning(
+                f"Peripheral cleanup routine timed out for: '{peripheral.name}'."
+            )
+
+    async def clean_up(self) -> None:
+        """
+        Clean up all peripherals.
+        """
+        logger.info(f"Cleaning up {len(self.peripherals)} peripheral(s).")
+        try:
+            async with trio.open_nursery() as nursery:
+                for peripheral in self.peripherals:
+                    nursery.start_soon(self._clean_up_peripheral, peripheral)
+        except BaseException as e:
+            logger.info("exception {}", e)
+        finally:
+            logger.info("Peripheral cleanup complete.")
 
     async def run(self) -> None:
         """
