@@ -1,11 +1,9 @@
 import logging
 import abc
-import sys
 import collections
 import datetime as dt
 import uuid
 import trio
-import collections
 
 from typing import (
     TypeVar,
