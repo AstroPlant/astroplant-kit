@@ -11,6 +11,7 @@ from typing import (
     Optional,
     Union,
     Iterable,
+    Collection,
     Dict,
     List,
     Callable,
@@ -826,7 +827,7 @@ class PeripheralManager(object):
         )
 
     @property
-    def peripherals(self) -> Iterable[Peripheral]:
+    def peripherals(self) -> Collection[Peripheral]:
         """
         :return: An iterable of all peripherals.
         """
