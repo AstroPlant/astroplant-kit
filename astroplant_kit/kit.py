@@ -73,8 +73,6 @@ class Kit(object):
         """
         Configure the kit.
         """
-        # configuration = self.api_client.configuration_path.kit_configuration().body[0]
-
         self._configuration = configuration
         logger.info(f"Activating configuration {configuration['description']}")
 
