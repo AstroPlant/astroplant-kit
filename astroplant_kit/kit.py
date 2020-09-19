@@ -156,11 +156,31 @@ class Kit(object):
         logger.info("Starting.")
 
         try:
-            await self.bootstrap()
-        except KeyboardInterrupt:
-            # Request halt
-            self.halt = True
-            print("HALT received...")
+            async with trio.open_nursery() as nursery:
+                nursery.start_soon(self.peripheral_manager.run_debug_display)
+
+                await self._bootstrap()
+
+                data_rx = self.peripheral_manager.data_receiver()
+
+                logger.debug("Starting peripheral manager.")
+                await self.peripheral_manager.set_up()
+
+                nursery.start_soon(self.peripheral_manager.run)
+                if self._controller is not None:
+                    logger.debug("Starting controller.")
+                    nursery.start_soon(self._controller.run)
+
+                async for data in data_rx:
+                    self.publish_data(data)
+        finally:
+            with trio.CancelScope() as cancel_scope:
+                cancel_scope.shield = True
+                async with trio.open_nursery() as cleanup_nursery:
+                    cleanup_nursery.start_soon(
+                        self.peripheral_manager.clean_up_debug_display
+                    )
+                    cleanup_nursery.start_soon(self.peripheral_manager.clean_up)
 
     async def _fetch_and_store_configuration(self) -> Any:
         logger.debug("Fetching kit configuration.")
@@ -174,61 +194,52 @@ class Kit(object):
         self.cache.write_quantity_types(quantity_types)
         return quantity_types
 
-    async def bootstrap(self) -> None:
-        async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.peripheral_manager.run_debug_display)
-
-            try:
-                configuration = await self._fetch_and_store_configuration()
-            except RpcError as e:
-                logger.warn(
-                    f"Could not get configuration from server, trying cache. Original error: {e}"
-                )
-                try:
-                    configuration = self.cache.read_configuration()
-                except Exception as e:
-                    logger.warn(
-                        f"Could not get configuration from cache, stopping. Original error: {e}"
-                    )
-                    return
-
-            if configuration is None:
-                logger.error("No configuration set. Exiting.")
-                raise errors.NoConfigurationError()
-
-            try:
-                quantity_types = await self._fetch_and_store_quantity_types()
-            except RpcError as e:
-                logger.warn(
-                    f"Could not get quantity types from server, trying cache. Original error: {e}"
-                )
-                try:
-                    quantity_types = self.cache.read_quantity_types()
-                except Exception as e:
-                    logger.warn(
-                        f"Could not get quantity types from cache, stopping. Original error: {e}"
-                    )
-                    return
-
-            self.peripheral_manager.set_quantity_types(
-                map(
-                    lambda qt: peripheral.QuantityType(
-                        qt["id"],
-                        qt["physicalQuantity"],
-                        qt["physicalUnit"],
-                        physical_unit_symbol=qt["physicalUnitSymbol"] or None,
-                    ),
-                    quantity_types,
-                )
+    async def _bootstrap(self) -> None:
+        """
+        Bootstrap by loading and activating configuration and quantity types
+        through RPC or cache.
+        """
+        try:
+            configuration = await self._fetch_and_store_configuration()
+        except RpcError as e:
+            logger.warn(
+                f"Could not get configuration from server, trying cache. Original error: {e}"
             )
-            self._configure(configuration)
-            data_rx = self.peripheral_manager.data_receiver()
+            try:
+                configuration = self.cache.read_configuration()
+            except Exception as e:
+                logger.warn(
+                    f"Could not get configuration from cache, stopping. Original error: {e}"
+                )
+                return
 
-            logger.debug("Starting peripheral manager.")
-            nursery.start_soon(self.peripheral_manager.run)
-            if self._controller is not None:
-                logger.debug("Starting controller.")
-                nursery.start_soon(self._controller.run)
+        if configuration is None:
+            logger.error("No configuration set. Exiting.")
+            raise errors.NoConfigurationError()
 
-            async for data in data_rx:
-                self.publish_data(data)
+        try:
+            quantity_types = await self._fetch_and_store_quantity_types()
+        except RpcError as e:
+            logger.warn(
+                f"Could not get quantity types from server, trying cache. Original error: {e}"
+            )
+            try:
+                quantity_types = self.cache.read_quantity_types()
+            except Exception as e:
+                logger.warn(
+                    f"Could not get quantity types from cache, stopping. Original error: {e}"
+                )
+                return
+
+        self.peripheral_manager.set_quantity_types(
+            map(
+                lambda qt: peripheral.QuantityType(
+                    qt["id"],
+                    qt["physicalQuantity"],
+                    qt["physicalUnit"],
+                    physical_unit_symbol=qt["physicalUnitSymbol"] or None,
+                ),
+                quantity_types,
+            )
+        )
+        self._configure(configuration)
