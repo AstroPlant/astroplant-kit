@@ -13,6 +13,7 @@ from typing import (
     Iterable,
     Collection,
     Dict,
+    Set,
     List,
     Callable,
     Awaitable,
@@ -21,6 +22,41 @@ from typing import (
 T = TypeVar("T")
 
 logger = logging.getLogger("astroplant_kit.peripheral")
+
+
+class PeripheralException(Exception):
+    """
+    Raised when a peripheral encounters an issue.
+    """
+
+    ...
+
+
+class TemporaryPeripheralError(PeripheralException):
+    """
+    Raised when an error is detected by a peripheral's implementation.
+    The caller might may try the same operation again.
+    """
+
+    ...
+
+
+class FatalPeripheralError(PeripheralException):
+    """
+    Raised when a fatal error is detected by a peripheral's implementation.
+    The caller should not try the same operation again.
+    """
+
+    ...
+
+
+class PeripheralCommandError(PeripheralException):
+    """
+    Raised when the command the peripheral was requested to perform is
+    erroneous.
+    """
+
+    ...
 
 
 class Measurement:
@@ -728,6 +764,7 @@ class PeripheralManager(object):
 
     def __init__(self):
         self._peripherals: Dict[str, Peripheral] = {}
+        self._successfully_set_up_peripherals: Set[Peripheral] = set()
         self._peripheral_control_locks: Dict[Peripheral, PeripheralControl] = {}
         self._debug_display: Peripheral = None
         self._data_txs: List[Tuple[trio.MemorySendChannel, DataFilterMap]] = []
@@ -880,9 +917,22 @@ class PeripheralManager(object):
         """
         if self._debug_display:
             logger.info("Setting up debug display.")
-            await self._debug_display.set_up()
-            logger.info("Debug display set up complete.")
-            await self._debug_display.run()
+            try:
+                await self._debug_display.set_up()
+            except PeripheralException as e:
+                logger.warning(f"Debug display setup failed: {e}")
+                return
+            logger.info("Debug display setup complete.")
+            while True:
+                try:
+                    await self._debug_display.run()
+                except TemporaryPeripheralError as e:
+                    logger.warning(f"Debug display encountered a temporary error: {e}")
+                except PeripheralException as e:
+                    logger.error(
+                        f"Debug display encountered an unrecoverable error: {e}"
+                    )
+                    break
 
     async def clean_up_debug_display(self) -> None:
         """
@@ -899,6 +949,19 @@ class PeripheralManager(object):
         if cancel_scope.cancelled_caught:
             logger.warning("Peripheral cleanup routine timed out for debug display.")
 
+    async def _set_up_peripheral(self, peripheral: Peripheral) -> None:
+        """
+        Run a peripheral's setup routine.
+        """
+        try:
+            await peripheral.set_up()
+            logger.debug(f"Successfully set up Peripheral '{peripheral.name}'.")
+            self._successfully_set_up_peripherals.add(peripheral)
+        except PeripheralException as e:
+            logger.error(
+                f"Encountered an error while trying to setup Peripheral '{peripheral.name}': {e}"
+            )
+
     async def set_up(self) -> None:
         """
         Set up all peripherals.
@@ -906,7 +969,7 @@ class PeripheralManager(object):
         logger.info(f"Setting up {len(self.peripherals)} peripheral(s).")
         async with trio.open_nursery() as nursery:
             for peripheral in self.peripherals:
-                nursery.start_soon(peripheral.set_up)
+                nursery.start_soon(self._set_up_peripheral, peripheral)
         logger.info("Peripheral setup complete.")
 
     async def _clean_up_peripheral(self, peripheral: Peripheral) -> None:
@@ -919,7 +982,7 @@ class PeripheralManager(object):
             await peripheral.clean_up()
         if cancel_scope.cancelled_caught:
             logger.warning(
-                f"Peripheral cleanup routine timed out for: '{peripheral.name}'."
+                f"Cleanup routine timed out for Peripheral '{peripheral.name}'."
             )
 
     async def clean_up(self) -> None:
@@ -936,13 +999,34 @@ class PeripheralManager(object):
         finally:
             logger.info("Peripheral cleanup complete.")
 
+    async def _run_peripheral(self, peripheral: Peripheral) -> None:
+        """
+        Run a peripheral. Handle peripheral exceptions. Re-run when a temporary
+        error occurs.
+        """
+        while True:
+            try:
+                await peripheral.run()
+            except TemporaryPeripheralError as e:
+                logger.warning(
+                    f"Peripheral '{peripheral.name}' encountered a temporary error: {e}"
+                )
+                # TODO: improve retry routine
+                await trio.sleep(10.0)
+            except PeripheralException as e:
+                logger.error(
+                    f"Peripheral '{peripheral.name}' encountered an unrecoverable error: {e}"
+                )
+                break
+
     async def run(self) -> None:
         """
         Run all runnable peripherals and broadcast data.
         """
         async with trio.open_nursery() as nursery:
             for peripheral in self.runnable_peripherals:
-                nursery.start_soon(peripheral.run)
+                if peripheral in self._successfully_set_up_peripherals:
+                    nursery.start_soon(self._run_peripheral, peripheral)
 
             async for data in self._data_rx:
                 await self._broadcast(data)
