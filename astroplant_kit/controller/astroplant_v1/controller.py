@@ -7,7 +7,12 @@ from enum import Enum
 from typing import NewType, Any, Optional, Iterable, Callable, Dict, List, Set, Tuple
 from typing_extensions import TypedDict
 
-from ...peripheral import PeripheralManager, Measurement
+from ...peripheral import (
+    PeripheralManager,
+    Measurement,
+    PeripheralException,
+    TemporaryPeripheralError,
+)
 from ..controller import Controller
 from .fuzzy_logic import (
     FUZZY_TRUE,
@@ -669,6 +674,7 @@ class AstroplantControllerV1(Controller):
         self._evaluator = Evaluator(fuzzy_control["rules"], self._input, self._output)
 
         self._sending: Set[Tuple[PeripheralName, CommandName]] = set()
+        self._ignore_list: Set[PeripheralName] = set()
         self._current_command_value: Dict[Tuple[PeripheralName, CommandName], Any] = {}
 
     async def _do_command(self, peripheral_name: PeripheralName, command: CommandName):
@@ -676,6 +682,8 @@ class AstroplantControllerV1(Controller):
         Waits until the peripheral is ready to accept a command, then sends the most
         recent command value.
         """
+        if peripheral_name in self._ignore_list:
+            return
         if (peripheral_name, command) in self._sending:
             return
         self._sending.add((peripheral_name, command))
@@ -691,7 +699,17 @@ class AstroplantControllerV1(Controller):
                 logger.debug(
                     "sending action to peripheral %s: %s", peripheral_name, action,
                 )
-                await do(action)
+                try:
+                    await do(action)
+                except TemporaryPeripheralError as e:
+                    logger.warning(
+                        f"Peripheral '{peripheral_name}' encountered a temporary error during execution of command {command}: {e}"
+                    )
+                except PeripheralException as e:
+                    logger.error(
+                        f"Peripheral '{peripheral_name}' encountered an unrecoverable error during execution of command {command}: {e}"
+                    )
+                    self._ignore_list.add(peripheral_name)
             finally:
                 self._sending.remove((peripheral_name, command))
 
