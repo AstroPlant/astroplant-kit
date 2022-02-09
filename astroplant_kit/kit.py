@@ -188,7 +188,7 @@ class Kit(object):
                     configuration = self.cache.read_configuration()
                 except Exception as e:
                     logger.warn(
-                        f"Could not get configuration from cache, stoping. Original error: {e}"
+                        f"Could not get configuration from cache, stopping. Original error: {e}"
                     )
                     return
 
@@ -206,7 +206,7 @@ class Kit(object):
                     quantity_types = self.cache.read_quantity_types()
                 except Exception as e:
                     logger.warn(
-                        f"Could not get quantity types from cache, stoping. Original error: {e}"
+                        f"Could not get quantity types from cache, stopping. Original error: {e}"
                     )
                     return
 
