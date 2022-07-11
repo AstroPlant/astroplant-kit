@@ -289,7 +289,7 @@ class Sensor(Peripheral):
         """
         while True:
             measurement = await self.measure()
-            if isinstance(measurement, collections.Iterable):
+            if isinstance(measurement, collections.abc.Iterable):
                 # Add all measurements to the sensor's measurement list (for later reduction)
                 self.measurements.extend(measurement)
 
