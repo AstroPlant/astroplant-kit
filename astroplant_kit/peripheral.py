@@ -413,7 +413,7 @@ class PeripheralControl(object):
     @reset_on_exit.setter
     def reset_on_exit(self, reset_on_exit: bool) -> None:
         owner = self._lock.statistics().owner
-        if owner is None or trio.hazmat.current_task() is not owner:
+        if owner is None or trio.lowlevel.current_task() is not owner:
             raise Exception(
                 "Calling task is not the lock owner. It must be the lock owner to change reset-on-exit behaviour."
             )
@@ -532,7 +532,7 @@ class Display(Peripheral):
     async def run(self) -> None:
         idx = 0
 
-        self._trio_token = trio.hazmat.current_trio_token()
+        self._trio_token = trio.lowlevel.current_trio_token()
 
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self._update_measurements)

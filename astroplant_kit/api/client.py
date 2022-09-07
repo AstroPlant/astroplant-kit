@@ -30,7 +30,7 @@ class Client:
         message_sender, message_receiver = trio.open_memory_channel[mqtt.MQTTMessage](0)
         self._message_sender = message_sender
         self._message_receiver = message_receiver
-        self._trio_token: Optional[trio.hazmat.TrioToken] = None
+        self._trio_token: Optional[trio.lowlevel.TrioToken] = None
 
         self._server_rpc = ServerRpc(self._server_rpc_request)
         self._kit_rpc = KitRpc(self._kit_rpc_response)
@@ -94,7 +94,7 @@ class Client:
         async with trio.open_nursery() as nursery:
             nursery.start_soon(self._server_rpc.run)
             nursery.start_soon(self._watch_connection)
-            self._trio_token = trio.hazmat.current_trio_token()
+            self._trio_token = trio.lowlevel.current_trio_token()
 
             try:
                 logger.debug("Starting API client.")
