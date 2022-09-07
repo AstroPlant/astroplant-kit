@@ -240,7 +240,7 @@ class Client:
         Publish media.
         """
         logger.debug(
-            f"Sending media: {media.peripheral.name}: {media.name} ({media.type}) {len(media.data)} byte(s)"
+            f"Sending media for '{media.peripheral.name}': {media.name} ({media.type}) {len(media.data)} byte(s)"
         )
 
         media_msg = astroplant_capnp.Media.new_message(
