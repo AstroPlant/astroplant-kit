@@ -188,7 +188,7 @@ class Client:
         Publish a (real-time) raw measurement.
         """
         logger.debug(
-            f"Sending raw measurement: {measurement.peripheral.name}: {measurement.quantity_type.physical_quantity} {measurement.value} {measurement.quantity_type.physical_unit_short} [{measurement.id}]"
+            f"Sending raw measurement for '{measurement.peripheral.name}': {measurement.quantity_type.physical_quantity} {measurement.value:.3f} {measurement.quantity_type.physical_unit_short} [{measurement.id}]"
         )
 
         raw_measurement_msg = astroplant_capnp.RawMeasurement.new_message(
@@ -211,7 +211,7 @@ class Client:
         Publish an aggregate measurement.
         """
         logger.debug(
-            f"Sending aggregate measurement: {measurement.peripheral.name}: {measurement.quantity_type.physical_quantity} in {measurement.quantity_type.physical_unit_short}: {measurement.values} [{measurement.id}]"
+            f"Sending aggregate measurement for '{measurement.peripheral.name}': {measurement.quantity_type.physical_quantity} in {measurement.quantity_type.physical_unit_short}: {measurement.values} [{measurement.id}]"
         )
 
         values = []
