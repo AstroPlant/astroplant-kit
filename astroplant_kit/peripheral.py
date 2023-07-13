@@ -1017,6 +1017,9 @@ class PeripheralManager(object):
                 )
                 break
 
+            # If the peripheral exits without an exception, should we retry?
+            await trio.sleep(10.0)
+
     async def run(self) -> None:
         """
         Run all runnable peripherals and broadcast data.
